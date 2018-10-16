@@ -121,21 +121,75 @@ public class MultipleSingleNodeAssemler {
         String pathtoforward = "hdfs:///Projects/indexes/Resources/ViraOutput/" + tempName + "/forward/part-*";
         String pathtoreverse = "hdfs:///Projects/indexes/Resources/ViraOutput/" + tempName + "/reverse/part-*";
 
+        String mkDir = "mkdir " + localdir + "/" + tempName;
+
+        System.out.println("mkdir command  " + mkDir);
+
+
+
+        try {
+            ProcessBuilder pb_dir = new ProcessBuilder("/bin/sh", "-c", mkDir);
+            Process process = pb_dir.start();
+            BufferedReader err = new BufferedReader(new InputStreamReader(process.getErrorStream()));
+            String e;
+            ArrayList<String> out = new ArrayList<String>();
+            while ((e = err.readLine()) != null) {
+                System.out.println(e);
+                out.add(e);
+            }
+            process.waitFor();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+
+
         String ass_cmd = "/srv/hops/hadoop/bin/hdfs dfs -text " + pathtoforward + " > "+localdir+"/"+tempName+"/forward.fq";
-        String ass_cmd1 = "/srv/hops/hadoop/bin/hdfs dfs -text " + pathtoreverse + " > "+localdir+"/"+tempName+"/reverse.fq";
+
 
 
         System.out.println("forward copy " + ass_cmd);
+
+
+
+        try {
+            ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", ass_cmd);
+            Process process = pb.start();
+            BufferedReader err1 = new BufferedReader(new InputStreamReader(process.getErrorStream()));
+            String e;
+            ArrayList<String> out = new ArrayList<String>();
+            while ((e = err1.readLine()) != null) {
+                System.out.println(e);
+                out.add(e);
+            }
+            process.waitFor();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        String ass_cmd1 = "/srv/hops/hadoop/bin/hdfs dfs -text " + pathtoreverse + " > "+localdir+"/"+tempName+"/reverse.fq";
         System.out.println("reverse copy " + ass_cmd1);
 
 
-        ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", ass_cmd);
-        pb.start();
+        try {
+            ProcessBuilder pb1 = new ProcessBuilder("/bin/sh", "-c", ass_cmd1);
+            Process process1 = pb1.start();
+            BufferedReader err2 = new BufferedReader(new InputStreamReader(process1.getErrorStream()));
+            String e;
+            ArrayList<String> out = new ArrayList<String>();
+            while ((e = err2.readLine()) != null) {
+                System.out.println(e);
+                out.add(e);
+            }
+            process1.waitFor();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
         ProcessBuilder pb1 = new ProcessBuilder("/bin/sh", "-c", ass_cmd1);
         pb1.start();
 
-
+        sc.stop();
 
     }
 
