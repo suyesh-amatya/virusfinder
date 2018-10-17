@@ -186,9 +186,64 @@ public class MultipleSingleNodeAssemler {
             e.printStackTrace();
         }
 
-        ProcessBuilder pb1 = new ProcessBuilder("/bin/sh", "-c", ass_cmd1);
-        pb1.start();
 
+        String config_file = "echo \"max_rd_len=150\n" +
+                "[LIB]\n" +
+                "#average insert size\n" +
+                "avg_ins=300\n" +
+                "#if sequence needs to be reversed\n" +
+                "reverse_seq=0\n" +
+                "#in which part(s) the reads are used\n" +
+                "asm_flags=3\n" +
+                "#use only first 100 bps of each read\n" +
+                "rd_len_cutoff=100\n" +
+                "#in which order the reads are used while scaffolding\n" +
+                "rank=1\n" +
+                "# cutoff of pair number for a reliable connection (at least 3 for short insert size)\n" +
+                "pair_num_cutoff=3\n" +
+                "#minimum aligned length to contigs for a reliable read location (at least 32 for short insert size)\n" +
+                "map_len=32\n" +
+                "#a pair of fastq file, read 1 file should always be followed by read 2 file\n" +
+                "q1="+localdir+"/"+tempName+"/forward.fq\n" +
+                "q2=" + localdir + "/" + tempName + "/reverse.fq\n \" >"+ localdir +"/soap.config.txt";
+
+        System.out.println("config file command " + config_file);
+
+        try {
+            ProcessBuilder pb2 = new ProcessBuilder("/bin/sh", "-c", config_file);
+            Process process2 = pb2.start();
+            BufferedReader err3 = new BufferedReader(new InputStreamReader(process2.getErrorStream()));
+            String e;
+            ArrayList<String> out = new ArrayList<String>();
+            while ((e = err3.readLine()) != null) {
+                System.out.println(e);
+                out.add(e);
+            }
+            process2.waitFor();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+
+        String Soapdenovo = "SOAPdenovo-63mer  all -s "+localdir+"/soap.config.txt -K 31 -R -o "+localdir+"/31 1 >"+localdir+"/ass.log 2 > "+localdir+"/ass.err";
+        System.out.println("config file command " + Soapdenovo);
+
+
+
+        try {
+            ProcessBuilder pb3 = new ProcessBuilder("/bin/sh", "-c", Soapdenovo);
+            Process process3 = pb3.start();
+            BufferedReader err4 = new BufferedReader(new InputStreamReader(process3.getErrorStream()));
+            String e;
+            ArrayList<String> out = new ArrayList<String>();
+            while ((e = err4.readLine()) != null) {
+                System.out.println(e);
+                out.add(e);
+            }
+            process3.waitFor();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         sc.stop();
 
     }
@@ -199,10 +254,7 @@ public class MultipleSingleNodeAssemler {
 
         return df.toJavaRDD().mapToPair(row -> {
 
-
-
-            String name = row.getAs("key");
-
+             String name = row.getAs("key");
 
             //TODO: check values
             Text t = new Text(name);
