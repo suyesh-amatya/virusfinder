@@ -67,11 +67,10 @@ public class MultipleSingleNodeAssemler {
         String inputPath = (cmd.hasOption("in") == true) ? cmd.getOptionValue("in") : null;
         String outDir = (cmd.hasOption("out") == true) ? cmd.getOptionValue("out") : null;
         String localdir = cmd.getOptionValue("localdir");
-        String readstype = (cmd.hasOption("single") == true) ? "-r" : "--12";
 
 
         FileSystem fs = FileSystem.get(new Configuration());
-        fs.mkdirs(fs, new Path(outDir), new FsPermission(FsAction.ALL, FsAction.ALL, FsAction.ALL));
+        //fs.mkdirs(fs, new Path(outDir), new FsPermission(FsAction.ALL, FsAction.ALL, FsAction.ALL));
 
         JavaPairRDD<Text, SequencedFragment> fastqRDD = sc.newAPIHadoopFile(inputPath, FastqInputFormat.class, Text.class, SequencedFragment.class, sc.hadoopConfiguration());
 
@@ -119,8 +118,8 @@ public class MultipleSingleNodeAssemler {
         String pathToLocalFasta = localdir + "/" + tempName;
 
         String cat = "cat " + pathToLocalFasta + "/part-* > "+pathToLocalFasta+"/fasta.fa";
-        String rm = "rm "+pathToLocalFasta+"/part-*";
         executeBashCommand(cat);
+        String rm = "rm "+pathToLocalFasta+"/part-*";
         executeBashCommand(rm);
 
 
@@ -152,9 +151,16 @@ public class MultipleSingleNodeAssemler {
 
         executeBashCommand(config_file);
 
-        String Soapdenovo = "SOAPdenovo-63mer  all -s "+pathToLocalFasta+"/soap.config.txt -K 31 -R -o "+pathToLocalFasta+"/31 1 >"+pathToLocalFasta+"/ass.log 2 > "+pathToLocalFasta+"/ass.err";
+
+        String mkdirs = "mkdir "+pathToLocalFasta+"/soap" + " & " + "mkdir "+pathToLocalFasta+"/soaptrans" + " & " + "mkdir "+pathToLocalFasta+"/idba";
+        executeBashCommand(mkdirs);
+
+        String Soapdenovo = "SOAPdenovo-63mer  all -s "+pathToLocalFasta+"/soap.config.txt -K 31 -R -o "+pathToLocalFasta+"/soap/31 1 >"+pathToLocalFasta+"/soap/ass.log 2 > "+pathToLocalFasta+"/soap/ass.err" + " & "
+                + "SOAPdenovo-Trans-31mer  all -s "+pathToLocalFasta+"/soap.config.txt -K 31 -R -o "+pathToLocalFasta+"/soaptrans/31 1 >"+pathToLocalFasta+"/soaptrans/ass.log 2 > "+pathToLocalFasta+"/soaptrans/ass.err" +" & "
+                + "/mnt/hdfs/2/idba/bin/idba --pre_correction -r "+pathToLocalFasta+"/fasta.fa -o "+pathToLocalFasta+"/idba";
 
 
+        executeBashCommand(Soapdenovo);
         sc.stop();
 
     }
