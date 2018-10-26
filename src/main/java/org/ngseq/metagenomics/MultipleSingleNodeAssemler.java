@@ -105,13 +105,6 @@ public class MultipleSingleNodeAssemler {
 
 
 
-
-
-
-
-
-
-
         fs.copyToLocalFile(true, new Path(path), new Path(localdir));
 
 
@@ -121,12 +114,6 @@ public class MultipleSingleNodeAssemler {
         executeBashCommand(cat);
         String rm = "rm "+pathToLocalFasta+"/part-*";
         executeBashCommand(rm);
-
-
-
-
-
-
 
 
 
@@ -152,15 +139,28 @@ public class MultipleSingleNodeAssemler {
         executeBashCommand(config_file);
 
 
-        String mkdirs = "mkdir "+pathToLocalFasta+"/soap" + " & " + "mkdir "+pathToLocalFasta+"/soaptrans" + " & " + "mkdir "+pathToLocalFasta+"/idba";
+        String mkdirs = "mkdir "+pathToLocalFasta+"/soap";
         executeBashCommand(mkdirs);
 
-        String Soapdenovo = "SOAPdenovo-63mer  all -s "+pathToLocalFasta+"/soap.config.txt -K 31 -R -o "+pathToLocalFasta+"/soap/31 1 >"+pathToLocalFasta+"/soap/ass.log 2 > "+pathToLocalFasta+"/soap/ass.err" + " & "
-                + "SOAPdenovo-Trans-31mer  all -s "+pathToLocalFasta+"/soap.config.txt -K 31 -R -o "+pathToLocalFasta+"/soaptrans/31 1 >"+pathToLocalFasta+"/soaptrans/ass.log 2 > "+pathToLocalFasta+"/soaptrans/ass.err" +" & "
-                + "/mnt/hdfs/2/idba/bin/idba --pre_correction -r "+pathToLocalFasta+"/fasta.fa -o "+pathToLocalFasta+"/idba";
+       // String Soapdenovo = "SOAPdenovo-63mer  all -s "+pathToLocalFasta+"/soap.config.txt -K 31 -R -o "+pathToLocalFasta+"/soap/31 1 >"+pathToLocalFasta+"/soap/ass.log 2 > "+pathToLocalFasta+"/soap/ass.err" + " & "
+         //       + "SOAPdenovo-Trans-31mer  all -s "+pathToLocalFasta+"/soap.config.txt -K 31 -R -o "+pathToLocalFasta+"/soaptrans/31 1 >"+pathToLocalFasta+"/soaptrans/ass.log 2 > "+pathToLocalFasta+"/soaptrans/ass.err" +" & "
+           //     + "/mnt/hdfs/2/idba/bin/idba --pre_correction -r "+pathToLocalFasta+"/fasta.fa -o "+pathToLocalFasta+"/idba";
 
 
-        executeBashCommand(Soapdenovo);
+
+
+        ArrayList<Integer> kmers = new ArrayList<Integer>(){{add(31);add(27);add(25);}};
+
+
+
+        for (int kmer : kmers) {
+            String mkdir = "mkdir "+kmer;
+            executeBashCommand(mkdir);
+            String Soapdenovo = "SOAPdenovo-63mer  all -s " + pathToLocalFasta + "/soap.config.txt -K "+kmer+" -R -o " + pathToLocalFasta + "/soap/"+kmer+"/"+kmer+" 1 >" + pathToLocalFasta + "/soap/ass.log 2 > " + pathToLocalFasta + "/soap/ass.err";
+            executeBashCommand(Soapdenovo);
+        }
+
+
         sc.stop();
 
     }
@@ -190,6 +190,7 @@ public class MultipleSingleNodeAssemler {
         });
 
     }
+
 
 
     private static void executeBashCommand(String command) {
