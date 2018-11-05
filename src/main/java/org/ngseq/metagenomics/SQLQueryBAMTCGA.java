@@ -76,7 +76,7 @@ public class SQLQueryBAMTCGA {
     }
 
 
-    String output = (cmd.hasOption("out") == true) ? cmd.getOptionValue("mapped") : null;
+    String output = (cmd.hasOption("out") == true) ? cmd.getOptionValue("out") : null;
 
     String in = (cmd.hasOption("in") == true) ? cmd.getOptionValue("in") : null;
     String select =  (cmd.hasOption("selection") == true) ? cmd.getOptionValue("selection") : null;
@@ -125,8 +125,8 @@ public class SQLQueryBAMTCGA {
 
         JavaPairRDD<Text, SequencedFragment> forwardRDD = dfToFastq(forwardDF);
         JavaPairRDD<Text, SequencedFragment> reverseRDD = dfToFastq(reverseDF);
-        forwardRDD.coalesce(1).saveAsNewAPIHadoopFile(output+ "/" + forward, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
-        reverseRDD.coalesce(1).saveAsNewAPIHadoopFile(output+ "/" + reverse, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+        forwardRDD.saveAsNewAPIHadoopFile(output+ "/" + "forward", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+        reverseRDD.saveAsNewAPIHadoopFile(output+ "/" + "reverse", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
 
 
 

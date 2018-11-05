@@ -35,7 +35,7 @@ public class MultipleSingleNodeAssemler {
 
 
     public static void main(String[] args) throws IOException {
-        SparkConf conf = new SparkConf().setAppName("Assemble");
+        SparkConf conf = new SparkConf().setAppName("MultipleSingleNodeAssemler");
         JavaSparkContext sc = new JavaSparkContext(conf);
         SQLContext sqlContext = new SQLContext(sc);
         Options options = new Options();
@@ -154,7 +154,7 @@ public class MultipleSingleNodeAssemler {
 
 
         for (int kmer : kmers) {
-            String mkdir = "mkdir "+kmer;
+            String mkdir = "mkdir "+pathToLocalFasta+"/soap/"+kmer;
             executeBashCommand(mkdir);
             String Soapdenovo = "SOAPdenovo-63mer  all -s " + pathToLocalFasta + "/soap.config.txt -K "+kmer+" -R -o " + pathToLocalFasta + "/soap/"+kmer+"/"+kmer+" 1 >" + pathToLocalFasta + "/soap/ass.log 2 > " + pathToLocalFasta + "/soap/ass.err";
             executeBashCommand(Soapdenovo);
