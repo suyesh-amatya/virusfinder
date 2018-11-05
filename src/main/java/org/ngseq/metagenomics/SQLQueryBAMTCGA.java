@@ -32,6 +32,8 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import static org.apache.spark.sql.functions.count;
+
 
 /**
  * Usage
@@ -51,17 +53,19 @@ public class SQLQueryBAMTCGA {
     SQLContext sqlContext = new SQLContext(sc);
 
     Options options = new Options();
-    Option opOpt = new Option("mapped", true, "HDFS path for output files. If not present, the output files are not moved to HDFS.");
-    Option out = new Option("unmapped", true, "HDFS path for output files. If not present, the output files are not moved to HDFS.");
+
+    Option out = new Option("out", true,"output");
     Option virOut = new Option("virDir", true, "HDFS path for output files. If not present, the output files are not moved to HDFS.");
+    Option selection = new Option("selection", true, "HDFS path for output files. If not present, the output files are not moved to HDFS.");
+
     Option queryOpt = new Option("query", true, "SQL query string.");
     Option baminOpt = new Option("in", true, "");
 
-    options.addOption(opOpt);
     options.addOption(queryOpt);
-    options.addOption(baminOpt);
     options.addOption(out);
+    options.addOption(baminOpt);
     options.addOption(virOut);
+    options.addOption(selection);
     CommandLineParser parser = new BasicParser();
     CommandLine cmd = null;
     try {
@@ -72,14 +76,14 @@ public class SQLQueryBAMTCGA {
     }
 
 
-    String mappedDir = (cmd.hasOption("mapped") == true) ? cmd.getOptionValue("mapped") : null;
-    String unmappedDir =  (cmd.hasOption("unmapped") == true) ? cmd.getOptionValue("unmapped") : null;
-    String virDir =  (cmd.hasOption("virOut") == true) ? cmd.getOptionValue("virOut") : null;
+    String output = (cmd.hasOption("out") == true) ? cmd.getOptionValue("mapped") : null;
+
     String in = (cmd.hasOption("in") == true) ? cmd.getOptionValue("in") : null;
+    String select =  (cmd.hasOption("selection") == true) ? cmd.getOptionValue("selection") : null;
+
     FileSystem fs = FileSystem.get(new Configuration());
     FileStatus[] st = fs.listStatus(new Path(in));
-    String query1 = "SELECT * from records WHERE readUnmapped = TRUE";
-    String query2 = "SELECT * from records WHERE readUnmapped = FALSE";
+
 
 
     ArrayList<String> bamToFastaq = new ArrayList<>();
@@ -103,19 +107,44 @@ public class SQLQueryBAMTCGA {
 
       Dataset<Row> samDF = sqlContext.createDataFrame(rdd, MyAlignment.class);
       samDF.registerTempTable("records");
+      Long total = samDF.count();
+      System.out.println("totol number of rows " + total.toString());
+
+      if (select.equals("all")) {
+
+        Dataset pairEndKeys = samDF.groupBy("readName").agg(count("*").as("count")).where("count > 1");
+        Dataset<Row> pairDF = pairEndKeys.join(samDF, pairEndKeys.col("readName").equalTo(samDF.col("readName"))).drop(pairEndKeys.col("readName"));
+        Long total_paired = pairDF.count();
+
+        pairDF.registerTempTable("paired");
+        System.out.println("totol number of paired rows " + total_paired.toString());
+        String forward = "SELECT * from paired WHERE firstOfPairFlag = TRUE";
+        String reverse = "SELECT * from paired WHERE firstOfPairFlag = FALSE";
+        Dataset<Row> forwardDF = sqlContext.sql(forward).sort("readName");
+        Dataset<Row> reverseDF = sqlContext.sql(reverse).sort("readName");
+
+        JavaPairRDD<Text, SequencedFragment> forwardRDD = dfToFastq(forwardDF);
+        JavaPairRDD<Text, SequencedFragment> reverseRDD = dfToFastq(reverseDF);
+        forwardRDD.coalesce(1).saveAsNewAPIHadoopFile(output+ "/" + forward, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+        reverseRDD.coalesce(1).saveAsNewAPIHadoopFile(output+ "/" + reverse, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
 
 
-      if (query1 != null) {
+
+
+      } else {
+
+        String unMapped = "SELECT * from records WHERE readUnmapped = TRUE";
+        String mapped = "SELECT * from records WHERE readUnmapped = FALSE";
 
         List<String> items = Arrays.asList(s.split("\\s*/\\s*"));
         String name = items.get(items.size() - 1);
 
-        Dataset df = sqlContext.sql(query1);
+        Dataset df = sqlContext.sql(unMapped);
         df.show(100);
 
-        df.groupBy("referenceName").count().show(100);
-        df.groupBy("length").count().show(100);
-        df.groupBy("cigar").count().show(100);
+       // df.groupBy("referenceName").count().show(100);
+        //df.groupBy("length").count().show(100);
+        //df.groupBy("cigar").count().show(100);
         //mappedreads.coalesce(1).write().csv(mappedDir + "/" + name);
 
 
@@ -125,11 +154,11 @@ public class SQLQueryBAMTCGA {
         //mappedViralReads.write().csv(virDir + "/" + name);
 
 
-        Dataset df2 = sqlContext.sql(query2);
+        Dataset df2 = sqlContext.sql(mapped);
 
-        df2.groupBy("referenceName").count().show(100);
-        df2.groupBy("length").count().show(100);
-        df2.groupBy("cigar").count().show(100);
+        //df2.groupBy("referenceName").count().show(100);
+        //df2.groupBy("length").count().show(100);
+        //df2.groupBy("cigar").count().show(100);
 
         //df2.show(100, false);
 
@@ -143,7 +172,7 @@ public class SQLQueryBAMTCGA {
 
 
 
-        fastqRDD.saveAsNewAPIHadoopFile(unmappedDir+"/"+name, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+        //fastqRDD.saveAsNewAPIHadoopFile(unmappedDir+"/"+name, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
 
 
       }
