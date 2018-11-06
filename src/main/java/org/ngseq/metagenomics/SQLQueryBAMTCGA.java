@@ -7,6 +7,7 @@ import org.apache.commons.cli.*;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
@@ -90,13 +91,11 @@ public class SQLQueryBAMTCGA {
 
 
     for (FileStatus f : Arrays.asList(st)) {
-      FileStatus[] b = fs.listStatus(new Path(f.getPath().toUri()));
-      for (FileStatus bam : Arrays.asList(b)) {
-        if (bam.getPath().getName().endsWith(".bam"))
-          bamToFastaq.add(bam.getPath().toUri().getRawPath().toString());
-      }
-    }
 
+        if (f.getPath().getName().endsWith(".bam"))
+          bamToFastaq.add(f.getPath().toUri().getRawPath().toString());
+    }
+    
 
     for (String s : bamToFastaq) {
       JavaPairRDD<LongWritable, SAMRecordWritable> bamPairRDD = sc.newAPIHadoopFile(s, AnySAMInputFormat.class, LongWritable.class, SAMRecordWritable.class, sc.hadoopConfiguration());
@@ -125,8 +124,13 @@ public class SQLQueryBAMTCGA {
 
         JavaPairRDD<Text, SequencedFragment> forwardRDD = dfToFastq(forwardDF);
         JavaPairRDD<Text, SequencedFragment> reverseRDD = dfToFastq(reverseDF);
-        forwardRDD.saveAsNewAPIHadoopFile(output+ "/" + "forward", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
-        reverseRDD.saveAsNewAPIHadoopFile(output+ "/" + "reverse", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+        forwardRDD.coalesce(1).saveAsNewAPIHadoopFile(output+ "/" + "forward", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+        reverseRDD.coalesce(1).saveAsNewAPIHadoopFile(output+ "/" + "reverse", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+
+
+
+
+
 
 
 
@@ -179,6 +183,34 @@ public class SQLQueryBAMTCGA {
 
    }
     sc.stop();
+
+    FileStatus[] dirs = fs.listStatus(new Path(output));
+    for (FileStatus dir : dirs) {
+      System.out.println("directory " + dir.toString());
+      FileStatus[] files = fs.listStatus(dir.getPath());
+      for (int i = 0; i < files.length; i++) {
+        String fn = files[i].getPath().getName();
+
+
+        if (!fn.equalsIgnoreCase("_SUCCESS")) {
+          String folder = dir.getPath().toUri().getRawPath();
+          System.out.println("folder " + folder);
+          String fileName = folder.substring(folder.lastIndexOf("/")+1) + ".fq";
+
+
+
+          Path srcPath = new Path(files[i].getPath().toUri().getRawPath());
+          String newPath = dir.getPath().getParent().toUri().getRawPath() + "/" + fileName;
+          System.out.println("this is new path " + newPath);
+          Path dstPath = new Path(newPath);
+
+
+          FileUtil.copy(fs, srcPath, fs, dstPath,true, new Configuration());
+          fs.delete(new Path(dir.getPath().toUri().getRawPath()));
+          System.out.println("*" + files[i].getPath().toUri().getRawPath());
+        }
+      }
+    }
 
   }
 
