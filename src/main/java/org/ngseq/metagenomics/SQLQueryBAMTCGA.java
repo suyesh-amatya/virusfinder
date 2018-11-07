@@ -95,7 +95,7 @@ public class SQLQueryBAMTCGA {
         if (f.getPath().getName().endsWith(".bam"))
           bamToFastaq.add(f.getPath().toUri().getRawPath().toString());
     }
-    
+
 
     for (String s : bamToFastaq) {
       JavaPairRDD<LongWritable, SAMRecordWritable> bamPairRDD = sc.newAPIHadoopFile(s, AnySAMInputFormat.class, LongWritable.class, SAMRecordWritable.class, sc.hadoopConfiguration());

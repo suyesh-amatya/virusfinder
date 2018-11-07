@@ -158,6 +158,20 @@ public class MultipleSingleNodeAssemler {
             executeBashCommand(mkdir);
             String Soapdenovo = "SOAPdenovo-63mer  all -s " + pathToLocalFasta + "/soap.config.txt -K "+kmer+" -R -o " + pathToLocalFasta + "/soap/"+kmer+"/"+kmer+" 1 >" + pathToLocalFasta + "/soap/ass.log 2 > " + pathToLocalFasta + "/soap/ass.err";
             executeBashCommand(Soapdenovo);
+
+            String movingFile = "mv " + pathToLocalFasta + "/soap/"+kmer+"/"+kmer+".scafSeq " + pathToLocalFasta + "/soap/";
+            executeBashCommand(movingFile);
+
+            int last = kmers.get(kmers.size() - 1);
+            if (last == kmer) {
+                String catAssembled = "cat " + pathToLocalFasta + "/soap/*.scafSeq > " + pathToLocalFasta + "/soap/aggregated_soap.fasta";
+                executeBashCommand(catAssembled);
+                String dl = "rm -rf " +pathToLocalFasta + "/soap/"+kmer;
+                executeBashCommand(dl);
+            }
+
+
+
         }
 
 
