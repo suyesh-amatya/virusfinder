@@ -161,13 +161,15 @@ public class MultipleSingleNodeAssemler {
 
             String movingFile = "mv " + pathToLocalFasta + "/soap/"+kmer+"/"+kmer+".scafSeq " + pathToLocalFasta + "/soap/";
             executeBashCommand(movingFile);
+            String dl = "rm -rf " +pathToLocalFasta + "/soap/"+kmer;
+            executeBashCommand(dl);
 
             int last = kmers.get(kmers.size() - 1);
             if (last == kmer) {
+                System.out.println("last element " + last);
                 String catAssembled = "cat " + pathToLocalFasta + "/soap/*.scafSeq > " + pathToLocalFasta + "/soap/aggregated_soap.fasta";
                 executeBashCommand(catAssembled);
-                String dl = "rm -rf " +pathToLocalFasta + "/soap/"+kmer;
-                executeBashCommand(dl);
+
             }
 
 

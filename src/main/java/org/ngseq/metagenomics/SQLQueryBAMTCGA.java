@@ -48,143 +48,113 @@ public class SQLQueryBAMTCGA {
   private static final Logger LOG = Logger.getLogger(SQLQueryBAMTCGA.class.getName());
 
   public static void main(String[] args) throws IOException {
-    SparkConf conf = new SparkConf().setAppName("SQLQueryBAM");
+      SparkConf conf = new SparkConf().setAppName("SQLQueryBAMTCGA");
 
-    JavaSparkContext sc = new JavaSparkContext(conf);
-    SQLContext sqlContext = new SQLContext(sc);
+      JavaSparkContext sc = new JavaSparkContext(conf);
+      SQLContext sqlContext = new SQLContext(sc);
 
-    Options options = new Options();
+      Options options = new Options();
 
-    Option out = new Option("out", true,"output");
-    Option virOut = new Option("virDir", true, "HDFS path for output files. If not present, the output files are not moved to HDFS.");
-    Option selection = new Option("selection", true, "HDFS path for output files. If not present, the output files are not moved to HDFS.");
+      Option out = new Option("out", true, "output");
+      Option virOut = new Option("virDir", true, "HDFS path for output files. If not present, the output files are not moved to HDFS.");
+      Option selection = new Option("selection", true, "HDFS path for output files. If not present, the output files are not moved to HDFS.");
 
-    Option queryOpt = new Option("query", true, "SQL query string.");
-    Option baminOpt = new Option("in", true, "");
+      Option queryOpt = new Option("query", true, "SQL query string.");
+      Option baminOpt = new Option("in", true, "");
 
-    options.addOption(queryOpt);
-    options.addOption(out);
-    options.addOption(baminOpt);
-    options.addOption(virOut);
-    options.addOption(selection);
-    CommandLineParser parser = new BasicParser();
-    CommandLine cmd = null;
-    try {
-      cmd = parser.parse(options, args);
+      options.addOption(queryOpt);
+      options.addOption(out);
+      options.addOption(baminOpt);
+      options.addOption(virOut);
+      options.addOption(selection);
+      CommandLineParser parser = new BasicParser();
+      CommandLine cmd = null;
+      try {
+          cmd = parser.parse(options, args);
 
-    } catch (ParseException exp) {
-      System.err.println("Parsing failed.  Reason: " + exp.getMessage());
-    }
-
-
-    String output = (cmd.hasOption("out") == true) ? cmd.getOptionValue("out") : null;
-
-    String in = (cmd.hasOption("in") == true) ? cmd.getOptionValue("in") : null;
-    String select =  (cmd.hasOption("selection") == true) ? cmd.getOptionValue("selection") : null;
-
-    FileSystem fs = FileSystem.get(new Configuration());
-    FileStatus[] st = fs.listStatus(new Path(in));
-
-
-
-    ArrayList<String> bamToFastaq = new ArrayList<>();
-
-
-    for (FileStatus f : Arrays.asList(st)) {
-
-        if (f.getPath().getName().endsWith(".bam"))
-          bamToFastaq.add(f.getPath().toUri().getRawPath().toString());
-    }
-
-
-    for (String s : bamToFastaq) {
-      JavaPairRDD<LongWritable, SAMRecordWritable> bamPairRDD = sc.newAPIHadoopFile(s, AnySAMInputFormat.class, LongWritable.class, SAMRecordWritable.class, sc.hadoopConfiguration());
-      //Map to SAMRecord RDD
-      JavaRDD<SAMRecord> samRDD = bamPairRDD.map(v1 -> v1._2().get());
-      JavaRDD<MyAlignment> rdd = samRDD.map(bam -> new MyAlignment(bam.getReadName(), bam.getStart(), bam.getReferenceName(), bam.getReadLength(), new String(bam.getReadBases(), StandardCharsets.UTF_8), bam.getCigarString(), bam.getReadUnmappedFlag(), bam.getDuplicateReadFlag(),bam.getBaseQualityString(), bam.getReadPairedFlag(), bam.getFirstOfPairFlag(), bam.getSecondOfPairFlag()));
-
-
-      Dataset<Row> samDF = sqlContext.createDataFrame(rdd, MyAlignment.class);
-      samDF.registerTempTable("records");
-      Long total = samDF.count();
-      System.out.println("totol number of rows " + total.toString());
-
-      if (select.equals("all")) {
-
-        Dataset pairEndKeys = samDF.groupBy("readName").agg(count("*").as("count")).where("count > 1");
-        Dataset<Row> pairDF = pairEndKeys.join(samDF, pairEndKeys.col("readName").equalTo(samDF.col("readName"))).drop(pairEndKeys.col("readName"));
-        Long total_paired = pairDF.count();
-
-        pairDF.registerTempTable("paired");
-        System.out.println("totol number of paired rows " + total_paired.toString());
-        String forward = "SELECT * from paired WHERE firstOfPairFlag = TRUE";
-        String reverse = "SELECT * from paired WHERE firstOfPairFlag = FALSE";
-        Dataset<Row> forwardDF = sqlContext.sql(forward).sort("readName");
-        Dataset<Row> reverseDF = sqlContext.sql(reverse).sort("readName");
-
-        JavaPairRDD<Text, SequencedFragment> forwardRDD = dfToFastq(forwardDF);
-        JavaPairRDD<Text, SequencedFragment> reverseRDD = dfToFastq(reverseDF);
-        forwardRDD.coalesce(1).saveAsNewAPIHadoopFile(output+ "/" + "forward", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
-        reverseRDD.coalesce(1).saveAsNewAPIHadoopFile(output+ "/" + "reverse", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
-
-
-
-
-
-
-
-
-
-      } else {
-
-        String unMapped = "SELECT * from records WHERE readUnmapped = TRUE";
-        String mapped = "SELECT * from records WHERE readUnmapped = FALSE";
-
-        List<String> items = Arrays.asList(s.split("\\s*/\\s*"));
-        String name = items.get(items.size() - 1);
-
-        Dataset df = sqlContext.sql(unMapped);
-        df.show(100);
-
-       // df.groupBy("referenceName").count().show(100);
-        //df.groupBy("length").count().show(100);
-        //df.groupBy("cigar").count().show(100);
-        //mappedreads.coalesce(1).write().csv(mappedDir + "/" + name);
-
-
-        //df.drop(df.col("referenceName").startsWith("chr")).show();
-        //Dataset mappedViralReads = df.drop(df.col("referenceName").startsWith("chr"));
-
-        //mappedViralReads.write().csv(virDir + "/" + name);
-
-
-        Dataset df2 = sqlContext.sql(mapped);
-
-        //df2.groupBy("referenceName").count().show(100);
-        //df2.groupBy("length").count().show(100);
-        //df2.groupBy("cigar").count().show(100);
-
-        //df2.show(100, false);
-
-        //metadata.coalesce(1).write().csv(bwaOutDir + "/" + name);
-        JavaRDD<String> tabDelRDD = dfToRDD(df2);
-
-        JavaPairRDD<Text, SequencedFragment> fastqRDD = dfToFastq(df2);
-        //tabDelRDD.saveAsTextFile(bwaOutDir+ "/" + name);
-        //fastqRDD.saveAsNewAPIHadoopFile(bwaOutDir+ "/" + name, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
-
-
-
-
-        //fastqRDD.saveAsNewAPIHadoopFile(unmappedDir+"/"+name, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
-
-
+      } catch (ParseException exp) {
+          System.err.println("Parsing failed.  Reason: " + exp.getMessage());
       }
 
-   }
+
+      String output = (cmd.hasOption("out") == true) ? cmd.getOptionValue("out") : null;
+
+      String in = (cmd.hasOption("in") == true) ? cmd.getOptionValue("in") : null;
+      String select = (cmd.hasOption("selection") == true) ? cmd.getOptionValue("selection") : null;
+
+      FileSystem fs = FileSystem.get(new Configuration());
+
+      ArrayList<String> bamToFastaq = new ArrayList<>();
+      FileStatus[] dirs = fs.listStatus(new Path(in));
+      for (FileStatus dir : dirs) {
+          System.out.println("directory " + dir.toString());
+          FileStatus[] files = fs.listStatus(dir.getPath());
+          String bm;
+          for (FileStatus f : Arrays.asList(files)) {
+
+              if (f.getPath().getName().endsWith(".bam")) {
+                  bm = f.getPath().toUri().getRawPath();
+                  JavaPairRDD<LongWritable, SAMRecordWritable> bamPairRDD = sc.newAPIHadoopFile(bm, AnySAMInputFormat.class, LongWritable.class, SAMRecordWritable.class, sc.hadoopConfiguration());
+              //Map to SAMRecord RDD
+              JavaRDD<SAMRecord> samRDD = bamPairRDD.map(v1 -> v1._2().get());
+              JavaRDD<MyAlignment> rdd = samRDD.map(bam -> new MyAlignment(bam.getReadName(), bam.getStart(), bam.getReferenceName(), bam.getReadLength(), new String(bam.getReadBases(), StandardCharsets.UTF_8), bam.getCigarString(), bam.getReadUnmappedFlag(), bam.getDuplicateReadFlag(), bam.getBaseQualityString(), bam.getReadPairedFlag(), bam.getFirstOfPairFlag(), bam.getSecondOfPairFlag()));
+
+
+              Dataset<Row> samDF = sqlContext.createDataFrame(rdd, MyAlignment.class);
+              samDF.registerTempTable("records");
+              Long total = samDF.count();
+              System.out.println("totol number of rows " + total.toString());
+
+              if (select.equals("all")) {
+
+                  Dataset pairEndKeys = samDF.groupBy("readName").agg(count("*").as("count")).where("count > 1");
+                  Dataset<Row> pairDF = pairEndKeys.join(samDF, pairEndKeys.col("readName").equalTo(samDF.col("readName"))).drop(pairEndKeys.col("readName"));
+                  Long total_paired = pairDF.count();
+
+                  pairDF.registerTempTable("paired");
+                  System.out.println("totol number of paired rows " + total_paired.toString());
+                  String forward = "SELECT * from paired WHERE firstOfPairFlag = TRUE";
+                  String reverse = "SELECT * from paired WHERE firstOfPairFlag = FALSE";
+                  Dataset<Row> forwardDF = sqlContext.sql(forward).sort("readName");
+                  Dataset<Row> reverseDF = sqlContext.sql(reverse).sort("readName");
+
+                  JavaPairRDD<Text, SequencedFragment> forwardRDD = dfToFastq(forwardDF);
+                  JavaPairRDD<Text, SequencedFragment> reverseRDD = dfToFastq(reverseDF);
+                  forwardRDD.coalesce(1).saveAsNewAPIHadoopFile(output + "/" + "forward", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+                  reverseRDD.coalesce(1).saveAsNewAPIHadoopFile(output + "/" + "reverse", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+
+
+              } else {
+                  String unMapped = "SELECT * from records WHERE readUnmapped = TRUE";
+
+
+                  List<String> items = Arrays.asList(bm.split("\\s*/\\s*"));
+                  for (String item : items) {
+                      LOG.log(Level.SEVERE, "here are the times" + item);
+                  }
+
+                  String name = items.get(items.size() - 1);
+
+
+                  Dataset df2 = sqlContext.sql(unMapped);
+                  df2.show();
+
+
+                  //metadata.coalesce(1).write().csv(bwaOutDir + "/" + name);
+                  //JavaRDD<String> tabDelRDD = dfToRDD(df2);
+
+                  JavaPairRDD<Text, SequencedFragment> fastqRDD = dfToFastq(df2);
+                  //tabDelRDD.saveAsTextFile(bwaOutDir+ "/" + name);
+                  fastqRDD.coalesce(1).saveAsNewAPIHadoopFile(output + "/" + name, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+                  //fastqRDD1.coalesce(1).saveAsNewAPIHadoopFile(output+ "/" + name + "mapped", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+              }
+              }
+          }
+      }
+
     sc.stop();
 
-    FileStatus[] dirs = fs.listStatus(new Path(output));
+   /*FileStatus[] dirs = fs.listStatus(new Path(output));
     for (FileStatus dir : dirs) {
       System.out.println("directory " + dir.toString());
       FileStatus[] files = fs.listStatus(dir.getPath());
@@ -210,7 +180,7 @@ public class SQLQueryBAMTCGA {
           System.out.println("*" + files[i].getPath().toUri().getRawPath());
         }
       }
-    }
+    }*/
 
   }
 
