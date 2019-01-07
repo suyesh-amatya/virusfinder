@@ -103,16 +103,31 @@ public class SQLQueryBAMTCGA {
               Dataset<Row> samDF = sqlContext.createDataFrame(rdd, MyAlignment.class);
               samDF.registerTempTable("records");
               Long total = samDF.count();
-              System.out.println("totol number of rows " + total.toString());
+              System.out.println("total number of rows " + total.toString());
 
-              if (select.equals("all")) {
+              if (select.equals("unaligned")) {
 
-                  Dataset pairEndKeys = samDF.groupBy("readName").agg(count("*").as("count")).where("count > 1");
-                  Dataset<Row> pairDF = pairEndKeys.join(samDF, pairEndKeys.col("readName").equalTo(samDF.col("readName"))).drop(pairEndKeys.col("readName"));
-                  Long total_paired = pairDF.count();
+                  String unMapped = "SELECT * from records WHERE readUnmapped = TRUE";
+
+                  String dr = dir.getPath().toUri().getRawPath();
+                  List<String> items = Arrays.asList(dr.split("\\s*/\\s*"));
+                  for (String item : items) {
+                      LOG.log(Level.SEVERE, "here are the items" + item);
+                  }
+
+                  String name = items.get(items.size() - 1);
+
+
+                  Dataset df2 = sqlContext.sql(unMapped);
+
+
+                  Dataset pairEndKeys = df2.groupBy("readName").agg(count("*").as("count")).where("count > 1");
+
+                  Dataset<Row> pairDF = pairEndKeys.join(df2, pairEndKeys.col("readName").equalTo(samDF.col("readName"))).drop(pairEndKeys.col("readName"));
+                  Long unmmaped_paired = pairDF.count();
+                  System.out.println("total number of unligned paired rows " + unmmaped_paired.toString());
 
                   pairDF.registerTempTable("paired");
-                  System.out.println("totol number of paired rows " + total_paired.toString());
                   String forward = "SELECT * from paired WHERE firstOfPairFlag = TRUE";
                   String reverse = "SELECT * from paired WHERE firstOfPairFlag = FALSE";
                   Dataset<Row> forwardDF = sqlContext.sql(forward).sort("readName");
@@ -120,67 +135,56 @@ public class SQLQueryBAMTCGA {
 
                   JavaPairRDD<Text, SequencedFragment> forwardRDD = dfToFastq(forwardDF);
                   JavaPairRDD<Text, SequencedFragment> reverseRDD = dfToFastq(reverseDF);
-                  forwardRDD.coalesce(1).saveAsNewAPIHadoopFile(output + "/" + "forward", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
-                  reverseRDD.coalesce(1).saveAsNewAPIHadoopFile(output + "/" + "reverse", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
-
-
-              } else {
-                  String unMapped = "SELECT * from records WHERE readUnmapped = TRUE";
-
-
-                  List<String> items = Arrays.asList(bm.split("\\s*/\\s*"));
-                  for (String item : items) {
-                      LOG.log(Level.SEVERE, "here are the times" + item);
-                  }
-
-                  String name = items.get(items.size() - 1);
-
-
-                  Dataset df2 = sqlContext.sql(unMapped);
-                  df2.show();
-
+                  forwardRDD.coalesce(1).saveAsNewAPIHadoopFile(output + "/" + name + "/" + "forward", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+                  reverseRDD.coalesce(1).saveAsNewAPIHadoopFile(output + "/" + name + "/" + "reverse", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
 
                   //metadata.coalesce(1).write().csv(bwaOutDir + "/" + name);
                   //JavaRDD<String> tabDelRDD = dfToRDD(df2);
 
-                  JavaPairRDD<Text, SequencedFragment> fastqRDD = dfToFastq(df2);
+                  //JavaPairRDD<Text, SequencedFragment> fastqRDD = dfToFastq(df2);
                   //tabDelRDD.saveAsTextFile(bwaOutDir+ "/" + name);
-                  fastqRDD.coalesce(1).saveAsNewAPIHadoopFile(output + "/" + name, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+                  //fastqRDD.coalesce(1).saveAsNewAPIHadoopFile(output + "/" + dir, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
                   //fastqRDD1.coalesce(1).saveAsNewAPIHadoopFile(output+ "/" + name + "mapped", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+
               }
+
               }
           }
       }
 
     sc.stop();
 
-   /*FileStatus[] dirs = fs.listStatus(new Path(output));
-    for (FileStatus dir : dirs) {
+   FileStatus[] dr = fs.listStatus(new Path(output));
+    for (FileStatus dir : dr) {
       System.out.println("directory " + dir.toString());
       FileStatus[] files = fs.listStatus(dir.getPath());
-      for (int i = 0; i < files.length; i++) {
-        String fn = files[i].getPath().getName();
+
+      for (FileStatus f : files) {
+          FileStatus[] forward_reverse = fs.listStatus(f.getPath());
+
+          for (int i = 0; i < forward_reverse.length; i++) {
+              String fn = forward_reverse[i].getPath().getName();
+              System.out.println("this is fn " + fn);
+
+              if (!fn.equalsIgnoreCase("_SUCCESS")) {
+                  String folder = f.getPath().toUri().getRawPath();
+                  System.out.println("folder " + folder);
+                  String fileName = folder.substring(folder.lastIndexOf("/") + 1) + ".fq";
 
 
-        if (!fn.equalsIgnoreCase("_SUCCESS")) {
-          String folder = dir.getPath().toUri().getRawPath();
-          System.out.println("folder " + folder);
-          String fileName = folder.substring(folder.lastIndexOf("/")+1) + ".fq";
+                  Path srcPath = new Path(forward_reverse[i].getPath().toUri().getRawPath());
+                  String newPath = f.getPath().getParent().toUri().getRawPath() + "/" + fileName;
+                  System.out.println("this is new path " + newPath);
+                  Path dstPath = new Path(newPath);
 
 
-
-          Path srcPath = new Path(files[i].getPath().toUri().getRawPath());
-          String newPath = dir.getPath().getParent().toUri().getRawPath() + "/" + fileName;
-          System.out.println("this is new path " + newPath);
-          Path dstPath = new Path(newPath);
-
-
-          FileUtil.copy(fs, srcPath, fs, dstPath,true, new Configuration());
-          fs.delete(new Path(dir.getPath().toUri().getRawPath()));
-          System.out.println("*" + files[i].getPath().toUri().getRawPath());
-        }
+                  FileUtil.copy(fs, srcPath, fs, dstPath, true, new Configuration());
+                  fs.delete(new Path(f.getPath().toUri().getRawPath()));
+                  System.out.println("*" + files[i].getPath().toUri().getRawPath());
+              }
+          }
       }
-    }*/
+    }
 
   }
 
