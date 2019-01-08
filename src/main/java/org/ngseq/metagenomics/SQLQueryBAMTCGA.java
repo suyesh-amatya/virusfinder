@@ -104,21 +104,23 @@ public class SQLQueryBAMTCGA {
               samDF.registerTempTable("records");
               Long total = samDF.count();
               System.out.println("total number of rows " + total.toString());
+              String unMapped = "SELECT * from records WHERE readUnmapped = TRUE";
 
-              if (select.equals("unaligned")) {
-
-                  String unMapped = "SELECT * from records WHERE readUnmapped = TRUE";
-
-                  String dr = dir.getPath().toUri().getRawPath();
-                  List<String> items = Arrays.asList(dr.split("\\s*/\\s*"));
-                  for (String item : items) {
-                      LOG.log(Level.SEVERE, "here are the items" + item);
-                  }
-
-                  String name = items.get(items.size() - 1);
+              Dataset df2 = sqlContext.sql(unMapped);
 
 
-                  Dataset df2 = sqlContext.sql(unMapped);
+              //case name for writing files
+              String dr = dir.getPath().toUri().getRawPath();
+              List<String> items = Arrays.asList(dr.split("\\s*/\\s*"));
+
+              String name = items.get(items.size() - 1);
+
+
+              if (select.equals("sorted")) {
+
+
+
+
 
 
                   Dataset pairEndKeys = df2.groupBy("readName").agg(count("*").as("count")).where("count > 1");
@@ -146,6 +148,10 @@ public class SQLQueryBAMTCGA {
                   //fastqRDD.coalesce(1).saveAsNewAPIHadoopFile(output + "/" + dir, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
                   //fastqRDD1.coalesce(1).saveAsNewAPIHadoopFile(output+ "/" + name + "mapped", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
 
+              } else {
+                  JavaPairRDD<Text, SequencedFragment> unAligned = dfToFastq(df2);
+                  unAligned.saveAsNewAPIHadoopFile(output + "/" + name, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+
               }
 
               }
@@ -154,7 +160,7 @@ public class SQLQueryBAMTCGA {
 
     sc.stop();
 
-   FileStatus[] dr = fs.listStatus(new Path(output));
+  /* FileStatus[] dr = fs.listStatus(new Path(output));
     for (FileStatus dir : dr) {
       System.out.println("directory " + dir.toString());
       FileStatus[] files = fs.listStatus(dir.getPath());
@@ -184,7 +190,7 @@ public class SQLQueryBAMTCGA {
               }
           }
       }
-    }
+    }*/
 
   }
 
@@ -209,7 +215,12 @@ public class SQLQueryBAMTCGA {
 
 
       String name = row.getAs("readName");
-
+        if(row.getAs("readPairedFlag")){
+            if(row.getAs("firstOfPairFlag"))
+                name = name+"/1";
+            if(row.getAs("secondOfPairFlag"))
+                name = name+"/2";
+        }
 
       //TODO: check values
       Text t = new Text(name);
