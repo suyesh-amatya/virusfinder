@@ -117,16 +117,16 @@ public class MultipleSingleNodeAssemler {
 
 
 
-        String config_file = "echo \"max_rd_len=150\n" +
+        String config_file = "echo \"max_rd_len=50\n" +
                 "[LIB]\n" +
                 "#average insert size\n" +
-                "avg_ins=300\n" +
+                "avg_ins=200\n" +
                 "#if sequence needs to be reversed\n" +
                 "reverse_seq=0\n" +
                 "#in which part(s) the reads are used\n" +
                 "asm_flags=3\n" +
                 "#use only first 100 bps of each read\n" +
-                "rd_len_cutoff=100\n" +
+                "rd_len_cutoff=50\n" +
                 "#in which order the reads are used while scaffolding\n" +
                 "rank=1\n" +
                 "# cutoff of pair number for a reliable connection (at least 3 for short insert size)\n" +
@@ -139,7 +139,7 @@ public class MultipleSingleNodeAssemler {
         executeBashCommand(config_file);
 
 
-        String mkdirs = "mkdir "+pathToLocalFasta+"/soap";
+        String mkdirs = "mkdir "+pathToLocalFasta+"/soap" + " & " + "mkdir "+pathToLocalFasta+"/idba"+" & " + "mkdir "+pathToLocalFasta+"/soaptrans";
         executeBashCommand(mkdirs);
 
        // String Soapdenovo = "SOAPdenovo-63mer  all -s "+pathToLocalFasta+"/soap.config.txt -K 31 -R -o "+pathToLocalFasta+"/soap/31 1 >"+pathToLocalFasta+"/soap/ass.log 2 > "+pathToLocalFasta+"/soap/ass.err" + " & "
@@ -149,26 +149,45 @@ public class MultipleSingleNodeAssemler {
 
 
 
-        ArrayList<Integer> kmers = new ArrayList<Integer>(){{add(31);add(27);add(25);}};
+        ArrayList<Integer> kmers = new ArrayList<Integer>(){{add(13);add(15);add(19);}};
 
 
 
         for (int kmer : kmers) {
+
             String mkdir = "mkdir "+pathToLocalFasta+"/soap/"+kmer;
             executeBashCommand(mkdir);
             String Soapdenovo = "SOAPdenovo-63mer  all -s " + pathToLocalFasta + "/soap.config.txt -K "+kmer+" -R -o " + pathToLocalFasta + "/soap/"+kmer+"/"+kmer+" 1 >" + pathToLocalFasta + "/soap/ass.log 2 > " + pathToLocalFasta + "/soap/ass.err";
             executeBashCommand(Soapdenovo);
-
             String movingFile = "mv " + pathToLocalFasta + "/soap/"+kmer+"/"+kmer+".scafSeq " + pathToLocalFasta + "/soap/";
             executeBashCommand(movingFile);
             String dl = "rm -rf " +pathToLocalFasta + "/soap/"+kmer;
             executeBashCommand(dl);
 
+            // run SOAPdenovo-Trans-31mer
+            String mkdirtrans = "mkdir "+pathToLocalFasta+"/soaptrans/"+kmer;
+            executeBashCommand(mkdirtrans);
+            String SoapdenovoTrans = "SOAPdenovo-Trans-31mer  all -s "+pathToLocalFasta+"/soap.config.txt -K "+kmer+"  -R -o "+pathToLocalFasta+"/soaptrans/"+kmer+"/"+kmer+" 1 >"+pathToLocalFasta+"/soaptrans/ass.log 2 > "+pathToLocalFasta+"/soaptrans/ass.err";
+            executeBashCommand(SoapdenovoTrans);
+            String movingFiletrans = "mv " + pathToLocalFasta + "/soaptrans/"+kmer+"/"+kmer+".scafSeq " + pathToLocalFasta + "/soaptrans/";
+            executeBashCommand(movingFiletrans);
+            String dltrans = "rm -rf " +pathToLocalFasta + "/soaptrans/"+kmer;
+            executeBashCommand(dltrans);
+
+
+
+
             int last = kmers.get(kmers.size() - 1);
             if (last == kmer) {
-                System.out.println("last element " + last);
+
                 String catAssembled = "cat " + pathToLocalFasta + "/soap/*.scafSeq > " + pathToLocalFasta + "/soap/aggregated_soap.fasta";
                 executeBashCommand(catAssembled);
+
+                String catAssembledtrans = "cat " + pathToLocalFasta + "/soaptrans/*.scafSeq > " + pathToLocalFasta + "/soaptrans/aggregated_soap.fasta";
+                executeBashCommand(catAssembledtrans);
+
+                String idba = "/mnt/hdfs/2/idba/bin/idba --pre_correction -r "+pathToLocalFasta+"/fasta.fa -o "+pathToLocalFasta+"/idba";
+                executeBashCommand(idba);
 
             }
 
