@@ -191,7 +191,16 @@ public class MultipleSingleNodeAssemler {
 
             }
 
+            String getAllcontigs = "cat " + pathToLocalFasta + "/soap/aggregated_soap.fasta " +  pathToLocalFasta + "/soaptrans/aggregated_soap.fasta "
+                    +pathToLocalFasta+"/idba/contig.fa > " +  pathToLocalFasta + "/final_contigs.fa";
+            executeBashCommand(getAllcontigs);
 
+            String cdhit = "/mnt/hdfs/2/cd-hit/cd-hit-est -i " + pathToLocalFasta +"/final_contigs.fa -o " +pathToLocalFasta +"/aggregated_assembly_cdhit -d 100 -T 0 -r 1 -g 1 -c 0.98 -G 0 -aS 0.95 -G 0 -M 0";
+            executeBashCommand(cdhit);
+
+
+            String final_local_path = pathToLocalFasta +"/aggregated_assembly_cdhit";
+            fs.copyFromLocalFile(new Path(final_local_path), new Path(outDir));
 
         }
 
@@ -231,7 +240,7 @@ public class MultipleSingleNodeAssemler {
     private static void executeBashCommand(String command) {
         try {
 
-            System.out.println("bash command  " + command);
+            System.out.println("bash command - " + command);
             ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", command);
             Process process = pb.start();
             BufferedReader err = new BufferedReader(new InputStreamReader(process.getErrorStream()));
