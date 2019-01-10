@@ -56,17 +56,18 @@ public class SQLQueryBAMTCGA {
       Options options = new Options();
 
       Option out = new Option("out", true, "output");
-      Option virOut = new Option("virDir", true, "HDFS path for output files. If not present, the output files are not moved to HDFS.");
       Option selection = new Option("selection", true, "HDFS path for output files. If not present, the output files are not moved to HDFS.");
 
       Option queryOpt = new Option("query", true, "SQL query string.");
       Option baminOpt = new Option("in", true, "");
+      Option metaOUT = new Option("metaOUT", true, "");
+
 
       options.addOption(queryOpt);
       options.addOption(out);
       options.addOption(baminOpt);
-      options.addOption(virOut);
       options.addOption(selection);
+      options.addOption(metaOUT);
       CommandLineParser parser = new BasicParser();
       CommandLine cmd = null;
       try {
@@ -81,6 +82,7 @@ public class SQLQueryBAMTCGA {
 
       String in = (cmd.hasOption("in") == true) ? cmd.getOptionValue("in") : null;
       String select = (cmd.hasOption("selection") == true) ? cmd.getOptionValue("selection") : null;
+      String metaOut = (cmd.hasOption("metaOUT") == true) ? cmd.getOptionValue("metaOUT") : null;
 
       FileSystem fs = FileSystem.get(new Configuration());
 
@@ -105,9 +107,14 @@ public class SQLQueryBAMTCGA {
               Long total = samDF.count();
               System.out.println("total number of rows " + total.toString());
               String unMapped = "SELECT * from records WHERE readUnmapped = TRUE";
+              String mapped = "SELECT * from records WHERE readUnmapped = FALSE";
 
+              Dataset df = sqlContext.sql(mapped);
               Dataset df2 = sqlContext.sql(unMapped);
 
+
+             Dataset meta = df.groupBy("referenceName").count();
+             JavaRDD <String> metaRDD = dfToMeta(meta );
 
               //case name for writing files
               String dr = dir.getPath().toUri().getRawPath();
@@ -116,10 +123,9 @@ public class SQLQueryBAMTCGA {
               String name = items.get(items.size() - 1);
 
 
+              metaRDD.coalesce(1).saveAsTextFile(metaOut + "/" +name);
+
               if (select.equals("sorted")) {
-
-
-
 
 
 
@@ -139,14 +145,6 @@ public class SQLQueryBAMTCGA {
                   JavaPairRDD<Text, SequencedFragment> reverseRDD = dfToFastq(reverseDF);
                   forwardRDD.coalesce(1).saveAsNewAPIHadoopFile(output + "/" + name + "/" + "forward", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
                   reverseRDD.coalesce(1).saveAsNewAPIHadoopFile(output + "/" + name + "/" + "reverse", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
-
-                  //metadata.coalesce(1).write().csv(bwaOutDir + "/" + name);
-                  //JavaRDD<String> tabDelRDD = dfToRDD(df2);
-
-                  //JavaPairRDD<Text, SequencedFragment> fastqRDD = dfToFastq(df2);
-                  //tabDelRDD.saveAsTextFile(bwaOutDir+ "/" + name);
-                  //fastqRDD.coalesce(1).saveAsNewAPIHadoopFile(output + "/" + dir, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
-                  //fastqRDD1.coalesce(1).saveAsNewAPIHadoopFile(output+ "/" + name + "mapped", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
 
               } else {
                   JavaPairRDD<Text, SequencedFragment> unAligned = dfToFastq(df2);
@@ -206,6 +204,15 @@ public class SQLQueryBAMTCGA {
       return output;
     });
   }
+
+    private static JavaRDD<String> dfToMeta (Dataset<Row> df) {
+        return df.toJavaRDD().map(row ->  {
+
+            String output = row.getAs("referenceName")+"\t"+row.getAs("count");
+
+            return output;
+        });
+    }
 
 
   private static JavaPairRDD<Text, SequencedFragment> dfToFastq(Dataset<Row> df) {

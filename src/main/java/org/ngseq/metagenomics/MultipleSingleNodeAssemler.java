@@ -21,7 +21,9 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.UUID;
 
 import static org.apache.spark.sql.functions.count;
 
@@ -70,7 +72,7 @@ public class MultipleSingleNodeAssemler {
 
 
         FileSystem fs = FileSystem.get(new Configuration());
-        //fs.mkdirs(fs, new Path(outDir), new FsPermission(FsAction.ALL, FsAction.ALL, FsAction.ALL));
+        fs.mkdirs(fs, new Path(outDir), new FsPermission(FsAction.ALL, FsAction.ALL, FsAction.ALL));
 
         JavaPairRDD<Text, SequencedFragment> fastqRDD = sc.newAPIHadoopFile(inputPath, FastqInputFormat.class, Text.class, SequencedFragment.class, sc.hadoopConfiguration());
 
@@ -87,7 +89,7 @@ public class MultipleSingleNodeAssemler {
         Dataset df = sqlContext.createDataFrame(rdd, MyRead.class);
         df.registerTempTable(tablename);
 
-        fs.mkdirs(fs,new Path(outDir),new FsPermission(FsAction.ALL,FsAction.ALL,FsAction.ALL));
+        //fs.mkdirs(fs,new Path(outDir),new FsPermission(FsAction.ALL,FsAction.ALL,FsAction.ALL));
         String tempName = String.valueOf((new Date()).getTime());
 
         // find pair ends
@@ -155,6 +157,8 @@ public class MultipleSingleNodeAssemler {
 
         for (int kmer : kmers) {
 
+
+            // run SOAPdenovo-63mer
             String mkdir = "mkdir "+pathToLocalFasta+"/soap/"+kmer;
             executeBashCommand(mkdir);
             String Soapdenovo = "SOAPdenovo-63mer  all -s " + pathToLocalFasta + "/soap.config.txt -K "+kmer+" -R -o " + pathToLocalFasta + "/soap/"+kmer+"/"+kmer+" 1 >" + pathToLocalFasta + "/soap/ass.log 2 > " + pathToLocalFasta + "/soap/ass.err";
@@ -186,23 +190,41 @@ public class MultipleSingleNodeAssemler {
                 String catAssembledtrans = "cat " + pathToLocalFasta + "/soaptrans/*.scafSeq > " + pathToLocalFasta + "/soaptrans/aggregated_soap.fasta";
                 executeBashCommand(catAssembledtrans);
 
+                // run idba assemblre
                 String idba = "/mnt/hdfs/2/idba/bin/idba --pre_correction -r "+pathToLocalFasta+"/fasta.fa -o "+pathToLocalFasta+"/idba";
                 executeBashCommand(idba);
 
             }
 
-            String getAllcontigs = "cat " + pathToLocalFasta + "/soap/aggregated_soap.fasta " +  pathToLocalFasta + "/soaptrans/aggregated_soap.fasta "
-                    +pathToLocalFasta+"/idba/contig.fa > " +  pathToLocalFasta + "/final_contigs.fa";
-            executeBashCommand(getAllcontigs);
+        } // for loop for kmers
 
-            String cdhit = "/mnt/hdfs/2/cd-hit/cd-hit-est -i " + pathToLocalFasta +"/final_contigs.fa -o " +pathToLocalFasta +"/aggregated_assembly_cdhit -d 100 -T 0 -r 1 -g 1 -c 0.98 -G 0 -aS 0.95 -G 0 -M 0";
-            executeBashCommand(cdhit);
+        String getAllcontigs = "cat " + pathToLocalFasta + "/soap/aggregated_soap.fasta " +  pathToLocalFasta + "/soaptrans/aggregated_soap.fasta "
+                +pathToLocalFasta+"/idba/contig.fa > " +  pathToLocalFasta + "/final_contigs.fa";
+        executeBashCommand(getAllcontigs);
+
+        String cdhit = "/mnt/hdfs/2/cd-hit/cd-hit-est -i " + pathToLocalFasta +"/final_contigs.fa -o " +pathToLocalFasta +"/aggregated_assembly_cdhit -d 100 -T 0 -r 1 -g 1 -c 0.98 -G 0 -aS 0.95 -G 0 -M 0";
+        executeBashCommand(cdhit);
 
 
-            String final_local_path = pathToLocalFasta +"/aggregated_assembly_cdhit";
-            fs.copyFromLocalFile(new Path(final_local_path), new Path(outDir));
+        String final_local_path = pathToLocalFasta +"/aggregated_assembly_cdhit";
+        fs.copyFromLocalFile(new Path(final_local_path), new Path(outDir));
 
-        }
+
+        JavaRDD<String> aggregateRDD = sc.textFile(outDir + "/aggregated_assembly_cdhit");
+
+        JavaRDD<String> crdd = aggregateRDD.filter(f -> f.trim().split("\n")[0].length()!=0).map(fasta->{
+
+            String[] fseq = fasta.trim().split("\n");
+            String id = fseq[0].split(" ")[0];
+
+            //Give unique id for sequence
+            String seq_id = id+"_"+ UUID.randomUUID().toString();
+            String seq = Arrays.toString(Arrays.copyOfRange(fseq, 1, fseq.length)).replace(", ","").replace("[","").replace("]","");
+
+            return ">"+seq_id+"\n"+seq;
+        });
+
+        crdd.saveAsTextFile(outDir +"/result");
 
 
         sc.stop();
