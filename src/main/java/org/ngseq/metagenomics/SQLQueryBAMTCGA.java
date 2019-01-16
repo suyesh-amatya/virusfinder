@@ -104,8 +104,7 @@ public class SQLQueryBAMTCGA {
 
               Dataset<Row> samDF = sqlContext.createDataFrame(rdd, MyAlignment.class);
               samDF.registerTempTable("records");
-              Long total = samDF.count();
-              System.out.println("total number of rows " + total.toString());
+
               String unMapped = "SELECT * from records WHERE readUnmapped = TRUE";
               String mapped = "SELECT * from records WHERE readUnmapped = FALSE";
 
@@ -113,8 +112,8 @@ public class SQLQueryBAMTCGA {
               Dataset df2 = sqlContext.sql(unMapped);
 
 
-             Dataset meta = df.groupBy("referenceName").count();
-             JavaRDD <String> metaRDD = dfToMeta(meta );
+             //Dataset meta = df.groupBy("referenceName").count();
+             //JavaRDD <String> metaRDD = dfToMeta(meta );
 
               //case name for writing files
               String dr = dir.getPath().toUri().getRawPath();
@@ -123,7 +122,7 @@ public class SQLQueryBAMTCGA {
               String name = items.get(items.size() - 1);
 
 
-              metaRDD.coalesce(1).saveAsTextFile(metaOut + "/" +name);
+              //metaRDD.coalesce(1).saveAsTextFile(metaOut + "/" +name);
 
               if (select.equals("sorted")) {
 

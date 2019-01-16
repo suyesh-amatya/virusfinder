@@ -18,6 +18,7 @@ import org.seqdoop.hadoop_bam.FastqInputFormat;
 import org.seqdoop.hadoop_bam.SequencedFragment;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
@@ -36,24 +37,21 @@ public class MultipleSingleNodeAssemler {
     private static String tablename = "records";
 
 
-    public static void main(String[] args) throws IOException {
+    public static void  main(String[] args) throws IOException {
         SparkConf conf = new SparkConf().setAppName("MultipleSingleNodeAssemler");
         JavaSparkContext sc = new JavaSparkContext(conf);
         SQLContext sqlContext = new SQLContext(sc);
+
         Options options = new Options();
 
-        Option splitOpt = new Option("in", true, "");
-        Option cOpt = new Option("t", true, "Threads");
-        Option kOpt = new Option("m", true, "fraction of memory to be used per process");
-        Option ouOpt = new Option("out", true, "");
+        Option in = new Option("in", true, "");
+        Option out = new Option("out", true, "");
+        Option local = new Option("localdir", true, "");
 
-        options.addOption(new Option("localdir", true, "Absolute path to local temp dir ( YARN must have write permissions if YARN used)"));
-        options.addOption(new Option("debug", "saves error log"));
-        options.addOption(new Option("single", "Single reads option, default is interleaved paired-end"));
-        options.addOption(splitOpt);
-        options.addOption(cOpt);
-        options.addOption(kOpt);
-        options.addOption(ouOpt);
+
+        options.addOption(in);
+        options.addOption(out);
+        options.addOption(local);
 
         HelpFormatter formatter = new HelpFormatter();
         formatter.printHelp("spark-submit <spark specific args>", options, true);
@@ -69,6 +67,7 @@ public class MultipleSingleNodeAssemler {
         String inputPath = (cmd.hasOption("in") == true) ? cmd.getOptionValue("in") : null;
         String outDir = (cmd.hasOption("out") == true) ? cmd.getOptionValue("out") : null;
         String localdir = cmd.getOptionValue("localdir");
+
 
 
         FileSystem fs = FileSystem.get(new Configuration());
@@ -169,14 +168,14 @@ public class MultipleSingleNodeAssemler {
             executeBashCommand(dl);
 
             // run SOAPdenovo-Trans-31mer
-            String mkdirtrans = "mkdir "+pathToLocalFasta+"/soaptrans/"+kmer;
+           /* String mkdirtrans = "mkdir "+pathToLocalFasta+"/soaptrans/"+kmer;
             executeBashCommand(mkdirtrans);
             String SoapdenovoTrans = "SOAPdenovo-Trans-31mer  all -s "+pathToLocalFasta+"/soap.config.txt -K "+kmer+"  -R -o "+pathToLocalFasta+"/soaptrans/"+kmer+"/"+kmer+" 1 >"+pathToLocalFasta+"/soaptrans/ass.log 2 > "+pathToLocalFasta+"/soaptrans/ass.err";
             executeBashCommand(SoapdenovoTrans);
             String movingFiletrans = "mv " + pathToLocalFasta + "/soaptrans/"+kmer+"/"+kmer+".scafSeq " + pathToLocalFasta + "/soaptrans/";
             executeBashCommand(movingFiletrans);
             String dltrans = "rm -rf " +pathToLocalFasta + "/soaptrans/"+kmer;
-            executeBashCommand(dltrans);
+            executeBashCommand(dltrans); */
 
 
 
@@ -198,33 +197,22 @@ public class MultipleSingleNodeAssemler {
 
         } // for loop for kmers
 
-        String getAllcontigs = "cat " + pathToLocalFasta + "/soap/aggregated_soap.fasta " +  pathToLocalFasta + "/soaptrans/aggregated_soap.fasta "
-                +pathToLocalFasta+"/idba/contig.fa > " +  pathToLocalFasta + "/final_contigs.fa";
-        executeBashCommand(getAllcontigs);
 
+        File idba = new File(pathToLocalFasta+"/idba/contig.fa");
+
+        if (idba.exists()) {
+
+            String getAllcontigs = "cat " + pathToLocalFasta + "/soap/aggregated_soap.fasta " + pathToLocalFasta + "/soaptrans/aggregated_soap.fasta "
+                    + pathToLocalFasta + "/idba/contig.fa > " + pathToLocalFasta + "/final_contigs.fa";
+            executeBashCommand(getAllcontigs);
+
+        }
         String cdhit = "/mnt/hdfs/2/cd-hit/cd-hit-est -i " + pathToLocalFasta +"/final_contigs.fa -o " +pathToLocalFasta +"/aggregated_assembly_cdhit -d 100 -T 0 -r 1 -g 1 -c 0.98 -G 0 -aS 0.95 -G 0 -M 0";
         executeBashCommand(cdhit);
 
 
         String final_local_path = pathToLocalFasta +"/aggregated_assembly_cdhit";
         fs.copyFromLocalFile(new Path(final_local_path), new Path(outDir));
-
-
-        JavaRDD<String> aggregateRDD = sc.textFile(outDir + "/aggregated_assembly_cdhit");
-
-        JavaRDD<String> crdd = aggregateRDD.filter(f -> f.trim().split("\n")[0].length()!=0).map(fasta->{
-
-            String[] fseq = fasta.trim().split("\n");
-            String id = fseq[0].split(" ")[0];
-
-            //Give unique id for sequence
-            String seq_id = id+"_"+ UUID.randomUUID().toString();
-            String seq = Arrays.toString(Arrays.copyOfRange(fseq, 1, fseq.length)).replace(", ","").replace("[","").replace("]","");
-
-            return ">"+seq_id+"\n"+seq;
-        });
-
-        crdd.saveAsTextFile(outDir +"/result");
 
 
         sc.stop();
