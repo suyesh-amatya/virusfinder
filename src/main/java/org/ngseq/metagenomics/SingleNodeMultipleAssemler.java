@@ -1,9 +1,10 @@
 package org.ngseq.metagenomics;
 
 import org.apache.commons.cli.*;
+import org.apache.commons.cli.Options;
+import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.io.Text;
@@ -21,37 +22,35 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.UUID;
+import java.util.*;
 
 import static org.apache.spark.sql.functions.count;
 
 /**
  * Created by zurbzh on 2018-10-16.
  */
-public class MultipleSingleNodeAssemler {
+public class SingleNodeMultipleAssemler {
 
 
     private static String tablename = "records";
 
 
     public static void  main(String[] args) throws IOException {
-        SparkConf conf = new SparkConf().setAppName("MultipleSingleNodeAssemler");
+        SparkConf conf = new SparkConf().setAppName("SingleNodeMultipleAssemler");
         JavaSparkContext sc = new JavaSparkContext(conf);
-        SQLContext sqlContext = new SQLContext(sc);
 
         Options options = new Options();
 
         Option in = new Option("in", true, "");
         Option out = new Option("out", true, "");
         Option local = new Option("localdir", true, "");
+        Option cases = new Option("cases", true, "");
 
 
         options.addOption(in);
         options.addOption(out);
         options.addOption(local);
+        options.addOption(cases);
 
         HelpFormatter formatter = new HelpFormatter();
         formatter.printHelp("spark-submit <spark specific args>", options, true);
@@ -67,53 +66,65 @@ public class MultipleSingleNodeAssemler {
         String inputPath = (cmd.hasOption("in") == true) ? cmd.getOptionValue("in") : null;
         String outDir = (cmd.hasOption("out") == true) ? cmd.getOptionValue("out") : null;
         String localdir = cmd.getOptionValue("localdir");
+        String patients = cmd.getOptionValue("cases");
 
 
 
         FileSystem fs = FileSystem.get(new Configuration());
         fs.mkdirs(fs, new Path(outDir), new FsPermission(FsAction.ALL, FsAction.ALL, FsAction.ALL));
 
-        JavaPairRDD<Text, SequencedFragment> fastqRDD = sc.newAPIHadoopFile(inputPath, FastqInputFormat.class, Text.class, SequencedFragment.class, sc.hadoopConfiguration());
+        Path patinentFile = new Path(patients);
+        FSDataInputStream inputStream = fs.open(patinentFile);
+        //Classical input stream usage
+        BufferedReader br = new BufferedReader(new InputStreamReader(inputStream));
+        String line;
+        ArrayList<String> lines = new ArrayList<String>();
+        while ((line = br.readLine()) != null) {
+            String caseId = line.split("\t")[0];
+            lines.add(caseId);
+        }
+        br.close();
 
 
-        JavaRDD<MyRead> rdd = fastqRDD.map(record -> {
-            MyRead read = new MyRead();
-            read.setKey(record._1.toString().split("/")[0]);
-            read.setRead(Integer.parseInt(record._1.toString().split("/")[1]));
-            read.setSequence(record._2.getSequence().toString());
-            read.setQuality(record._2.getQuality().toString());
-            return read;
-        });
 
-        Dataset df = sqlContext.createDataFrame(rdd, MyRead.class);
-        df.registerTempTable(tablename);
+        inputStream.close();
+        //fs.close();
 
-        //fs.mkdirs(fs,new Path(outDir),new FsPermission(FsAction.ALL,FsAction.ALL,FsAction.ALL));
         String tempName = String.valueOf((new Date()).getTime());
 
-        // find pair ends
-        Dataset pairEndKeys = df.groupBy("key").agg(count("*").as("count")).where("count > 1");
-
-        Dataset<Row> pairDF = pairEndKeys.join(df, pairEndKeys.col("key").equalTo(df.col("key"))).drop(pairEndKeys.col("key"));
-
-        Dataset<Row> sortedPairDF = pairDF.sort("key");
+        String hdfsTempname = "hdfs:///Projects/TCGA/Resources/" + tempName;
 
 
-        String path = "hdfs:///Projects/indexes/Resources/ViraOutput/" + tempName;
+        FileStatus[] files = fs.listStatus(new Path(inputPath));
+
+        for (FileStatus file : files) {
+            String fl = file.getPath().toUri().getRawPath();
+            List<String> items = Arrays.asList(fl.split("\\s*/\\s*"));
+            String name = items.get(items.size() - 1).split("\\.")[0];
+            if (lines.contains(name))
+            {
+
+                Path srcPath = new Path(file.getPath().toUri().getRawPath());
+                Path dstPath = new Path( hdfsTempname+ "/" + name + ".fq");
+                FileUtil.copy(fs, srcPath, fs, dstPath, false, new Configuration());
+
+            }
+        }
 
 
-        dfToFasta(sortedPairDF).coalesce(100).saveAsTextFile(path);
 
 
+        fs.mkdirs(fs,new Path(outDir),new FsPermission(FsAction.ALL,FsAction.ALL,FsAction.ALL));
 
-        fs.copyToLocalFile(true, new Path(path), new Path(localdir));
+
+        fs.copyToLocalFile(false, new Path(hdfsTempname), new Path(localdir));
 
 
         String pathToLocalFasta = localdir + "/" + tempName;
 
-        String cat = "cat " + pathToLocalFasta + "/part-* > "+pathToLocalFasta+"/fasta.fa";
+        String cat = "cat " + pathToLocalFasta + "/*.fq > "+pathToLocalFasta+"/fasta.fa";
         executeBashCommand(cat);
-        String rm = "rm "+pathToLocalFasta+"/part-*";
+        String rm = "rm "+pathToLocalFasta+"/*.fq";
         executeBashCommand(rm);
 
 
@@ -150,7 +161,7 @@ public class MultipleSingleNodeAssemler {
 
 
 
-        ArrayList<Integer> kmers = new ArrayList<Integer>(){{add(13);add(15);add(19);}};
+        ArrayList<Integer> kmers = new ArrayList<Integer>(){{add(15);add(19);add(21);}};
 
 
 
@@ -168,14 +179,14 @@ public class MultipleSingleNodeAssemler {
             executeBashCommand(dl);
 
             // run SOAPdenovo-Trans-31mer
-           /* String mkdirtrans = "mkdir "+pathToLocalFasta+"/soaptrans/"+kmer;
+            String mkdirtrans = "mkdir "+pathToLocalFasta+"/soaptrans/"+kmer;
             executeBashCommand(mkdirtrans);
             String SoapdenovoTrans = "SOAPdenovo-Trans-31mer  all -s "+pathToLocalFasta+"/soap.config.txt -K "+kmer+"  -R -o "+pathToLocalFasta+"/soaptrans/"+kmer+"/"+kmer+" 1 >"+pathToLocalFasta+"/soaptrans/ass.log 2 > "+pathToLocalFasta+"/soaptrans/ass.err";
             executeBashCommand(SoapdenovoTrans);
             String movingFiletrans = "mv " + pathToLocalFasta + "/soaptrans/"+kmer+"/"+kmer+".scafSeq " + pathToLocalFasta + "/soaptrans/";
             executeBashCommand(movingFiletrans);
             String dltrans = "rm -rf " +pathToLocalFasta + "/soaptrans/"+kmer;
-            executeBashCommand(dltrans); */
+            executeBashCommand(dltrans);
 
 
 
@@ -186,11 +197,11 @@ public class MultipleSingleNodeAssemler {
                 String catAssembled = "cat " + pathToLocalFasta + "/soap/*.scafSeq > " + pathToLocalFasta + "/soap/aggregated_soap.fasta";
                 executeBashCommand(catAssembled);
 
-                String catAssembledtrans = "cat " + pathToLocalFasta + "/soaptrans/*.scafSeq > " + pathToLocalFasta + "/soaptrans/aggregated_soap.fasta";
-                executeBashCommand(catAssembledtrans);
+                //String catAssembledtrans = "cat " + pathToLocalFasta + "/soaptrans/*.scafSeq > " + pathToLocalFasta + "/soaptrans/aggregated_soap.fasta";
+                //executeBashCommand(catAssembledtrans);
 
                 // run idba assemblre
-                String idba = "/mnt/hdfs/2/idba/bin/idba --pre_correction -r "+pathToLocalFasta+"/fasta.fa -o "+pathToLocalFasta+"/idba";
+                String idba = "idba --pre_correction -r "+pathToLocalFasta+"/fasta.fa -o "+pathToLocalFasta+"/idba";
                 executeBashCommand(idba);
 
             }
@@ -198,16 +209,19 @@ public class MultipleSingleNodeAssemler {
         } // for loop for kmers
 
 
-        File idba = new File(pathToLocalFasta+"/idba/contig.fa");
+        File idba = new File(pathToLocalFasta+"/idba/scaffold.fa");
 
         if (idba.exists()) {
 
-            String getAllcontigs = "cat " + pathToLocalFasta + "/soap/aggregated_soap.fasta " + pathToLocalFasta + "/soaptrans/aggregated_soap.fasta "
-                    + pathToLocalFasta + "/idba/contig.fa > " + pathToLocalFasta + "/final_contigs.fa";
+            String getAllcontigs = "cat " + pathToLocalFasta + "/soap/aggregated_soap.fasta " + pathToLocalFasta + "/idba/scaffold.fa > " + pathToLocalFasta + "/final_contigs.fa";
             executeBashCommand(getAllcontigs);
 
+        } else {
+            String getAllcontigs = "cat " + pathToLocalFasta + "/soap/aggregated_soap.fasta " + pathToLocalFasta + "/idba/contig.fa > " + pathToLocalFasta + "/final_contigs.fa";
+            executeBashCommand(getAllcontigs);
         }
-        String cdhit = "/mnt/hdfs/2/cd-hit/cd-hit-est -i " + pathToLocalFasta +"/final_contigs.fa -o " +pathToLocalFasta +"/aggregated_assembly_cdhit -d 100 -T 0 -r 1 -g 1 -c 0.98 -G 0 -aS 0.95 -G 0 -M 0";
+
+        String cdhit = "cd-hit-est -i " + pathToLocalFasta +"/final_contigs.fa -o " +pathToLocalFasta +"/aggregated_assembly_cdhit -d 100 -T 0 -r 1 -g 1 -c 0.98 -G 0 -aS 0.95 -G 0 -M 0";
         executeBashCommand(cdhit);
 
 

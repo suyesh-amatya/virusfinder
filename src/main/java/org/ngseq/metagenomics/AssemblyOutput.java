@@ -13,7 +13,7 @@ import java.util.UUID;
 public class AssemblyOutput {
 
     public static void parsing (String input) {
-        SparkConf conf = new SparkConf().setAppName("MultipleSingleNodeAssemler");
+        SparkConf conf = new SparkConf().setAppName("SingleNodeMultipleAssemler");
         JavaSparkContext sc = new JavaSparkContext(conf);
 
 
