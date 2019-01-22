@@ -86,7 +86,6 @@ public class SQLQueryBAMTCGA {
 
       FileSystem fs = FileSystem.get(new Configuration());
 
-      ArrayList<String> bamToFastaq = new ArrayList<>();
       FileStatus[] dirs = fs.listStatus(new Path(in));
       for (FileStatus dir : dirs) {
           System.out.println("directory " + dir.toString());

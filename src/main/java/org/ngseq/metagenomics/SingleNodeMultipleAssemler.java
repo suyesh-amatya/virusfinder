@@ -161,7 +161,7 @@ public class SingleNodeMultipleAssemler {
 
 
 
-        ArrayList<Integer> kmers = new ArrayList<Integer>(){{add(15);add(19);add(21);}};
+        ArrayList<Integer> kmers = new ArrayList<Integer>(){{add(21);add(23);}};
 
 
 
@@ -179,14 +179,14 @@ public class SingleNodeMultipleAssemler {
             executeBashCommand(dl);
 
             // run SOAPdenovo-Trans-31mer
-            String mkdirtrans = "mkdir "+pathToLocalFasta+"/soaptrans/"+kmer;
+           /* String mkdirtrans = "mkdir "+pathToLocalFasta+"/soaptrans/"+kmer;
             executeBashCommand(mkdirtrans);
             String SoapdenovoTrans = "SOAPdenovo-Trans-31mer  all -s "+pathToLocalFasta+"/soap.config.txt -K "+kmer+"  -R -o "+pathToLocalFasta+"/soaptrans/"+kmer+"/"+kmer+" 1 >"+pathToLocalFasta+"/soaptrans/ass.log 2 > "+pathToLocalFasta+"/soaptrans/ass.err";
             executeBashCommand(SoapdenovoTrans);
             String movingFiletrans = "mv " + pathToLocalFasta + "/soaptrans/"+kmer+"/"+kmer+".scafSeq " + pathToLocalFasta + "/soaptrans/";
             executeBashCommand(movingFiletrans);
             String dltrans = "rm -rf " +pathToLocalFasta + "/soaptrans/"+kmer;
-            executeBashCommand(dltrans);
+            executeBashCommand(dltrans); */
 
 
 
