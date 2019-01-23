@@ -161,7 +161,7 @@ public class SingleNodeMultipleAssemler {
 
 
 
-        ArrayList<Integer> kmers = new ArrayList<Integer>(){{add(21);add(23);}};
+        ArrayList<Integer> kmers = new ArrayList<Integer>(){{add(19);add(21);add(23);}};
 
 
 
@@ -179,14 +179,14 @@ public class SingleNodeMultipleAssemler {
             executeBashCommand(dl);
 
             // run SOAPdenovo-Trans-31mer
-           /* String mkdirtrans = "mkdir "+pathToLocalFasta+"/soaptrans/"+kmer;
+            String mkdirtrans = "mkdir "+pathToLocalFasta+"/soaptrans/"+kmer;
             executeBashCommand(mkdirtrans);
             String SoapdenovoTrans = "SOAPdenovo-Trans-31mer  all -s "+pathToLocalFasta+"/soap.config.txt -K "+kmer+"  -R -o "+pathToLocalFasta+"/soaptrans/"+kmer+"/"+kmer+" 1 >"+pathToLocalFasta+"/soaptrans/ass.log 2 > "+pathToLocalFasta+"/soaptrans/ass.err";
             executeBashCommand(SoapdenovoTrans);
             String movingFiletrans = "mv " + pathToLocalFasta + "/soaptrans/"+kmer+"/"+kmer+".scafSeq " + pathToLocalFasta + "/soaptrans/";
             executeBashCommand(movingFiletrans);
             String dltrans = "rm -rf " +pathToLocalFasta + "/soaptrans/"+kmer;
-            executeBashCommand(dltrans); */
+            executeBashCommand(dltrans);
 
 
 
@@ -197,8 +197,8 @@ public class SingleNodeMultipleAssemler {
                 String catAssembled = "cat " + pathToLocalFasta + "/soap/*.scafSeq > " + pathToLocalFasta + "/soap/aggregated_soap.fasta";
                 executeBashCommand(catAssembled);
 
-                //String catAssembledtrans = "cat " + pathToLocalFasta + "/soaptrans/*.scafSeq > " + pathToLocalFasta + "/soaptrans/aggregated_soap.fasta";
-                //executeBashCommand(catAssembledtrans);
+                String catAssembledtrans = "cat " + pathToLocalFasta + "/soaptrans/*.scafSeq > " + pathToLocalFasta + "/soaptrans/aggregated_soap.fasta";
+                executeBashCommand(catAssembledtrans);
 
                 // run idba assemblre
                 String idba = "idba --pre_correction -r "+pathToLocalFasta+"/fasta.fa -o "+pathToLocalFasta+"/idba";
@@ -213,11 +213,11 @@ public class SingleNodeMultipleAssemler {
 
         if (idba.exists()) {
 
-            String getAllcontigs = "cat " + pathToLocalFasta + "/soap/aggregated_soap.fasta " + pathToLocalFasta + "/idba/scaffold.fa > " + pathToLocalFasta + "/final_contigs.fa";
+            String getAllcontigs = "cat " + pathToLocalFasta + "/soap/aggregated_soap.fasta " + pathToLocalFasta + "/soaptrans/aggregated_soap.fasta " + pathToLocalFasta + "/idba/scaffold.fa > " + pathToLocalFasta + "/final_contigs.fa";
             executeBashCommand(getAllcontigs);
 
         } else {
-            String getAllcontigs = "cat " + pathToLocalFasta + "/soap/aggregated_soap.fasta " + pathToLocalFasta + "/idba/contig.fa > " + pathToLocalFasta + "/final_contigs.fa";
+            String getAllcontigs = "cat " + pathToLocalFasta + "/soap/aggregated_soap.fasta " + pathToLocalFasta + "/soaptrans/aggregated_soap.fasta " + pathToLocalFasta + "/idba/contig.fa > " + pathToLocalFasta + "/final_contigs.fa";
             executeBashCommand(getAllcontigs);
         }
 

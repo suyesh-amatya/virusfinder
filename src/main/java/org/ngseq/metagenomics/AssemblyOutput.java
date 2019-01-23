@@ -1,5 +1,6 @@
 package org.ngseq.metagenomics;
 
+import antlr.StringUtils;
 import org.apache.commons.cli.*;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
@@ -12,32 +13,62 @@ import java.util.UUID;
 
 public class AssemblyOutput {
 
-    public static void parsing (String input) {
-        SparkConf conf = new SparkConf().setAppName("SingleNodeMultipleAssemler");
+    public static void main(String[] args) throws IOException  {
+        SparkConf conf = new SparkConf().setAppName("AssemblyOutput");
+
         JavaSparkContext sc = new JavaSparkContext(conf);
 
+        Options options = new Options();
 
-        JavaRDD<String> aggregateRDD = sc.textFile(input + "/aggregated_assembly_cdhit");
-
-        JavaRDD<String> crdd = aggregateRDD.filter(f -> f.startsWith(">")).map(fasta -> {
-
-            String[] fseq = fasta.trim().split("\n", 2);
-            String id = fseq[0].split(" ")[0];
-            System.out.println("there are fseq + " + fseq[0]);
-            System.out.println("there are ids + " + id);
+        Option out = new Option("out", true, "output");
+        Option folderIn = new Option("in", true, "");
 
 
+        options.addOption(out);
+        options.addOption(folderIn);
+        CommandLineParser parser = new BasicParser();
+        CommandLine cmd = null;
+        try {
+            cmd = parser.parse(options, args);
+
+        } catch (ParseException exp) {
+            System.err.println("Parsing failed.  Reason: " + exp.getMessage());
+        }
+
+
+        String output = (cmd.hasOption("out") == true) ? cmd.getOptionValue("out") : null;
+
+        String in = (cmd.hasOption("in") == true) ? cmd.getOptionValue("in") : null;
+
+
+        JavaRDD<String> aggregateRDD = sc.textFile(in);
+
+        JavaRDD<String> crdd = aggregateRDD.map(fasta->{
+
+
+            String[] fseq = fasta.trim().split("\t");
+
+
+            String id = fseq[0].split("_")[0];
             //Give unique id for sequence
-            String seq_id = id + "_" + UUID.randomUUID().toString();
-            System.out.println("there are seq_id + " + seq_id);
+            String seq_id = id+"_"+UUID.randomUUID().toString();
+            String seq = fseq[1];
+            int Ncount = seq.length() - seq.replace("N", "").length();
+
+            double N_fraction = (double) Ncount / seq.length() * 100;
+
+            if (N_fraction < 10) {
+                return ">"+seq_id+"\n"+seq;
+            } else {
+                return "abadeli deli delasa";
+            }
 
 
-            String seq = Arrays.toString(Arrays.copyOfRange(fseq, 1, fseq.length)).replace(", ", "").replace("[", "").replace("]", "");
-            System.out.println("there are seq + " + seq);
-            return ">" + seq_id + "\n" + seq;
-        });
+        }).filter(f -> f.trim().startsWith(">"));
 
-        crdd.saveAsTextFile(input + "/result");
+
+
+        crdd.saveAsTextFile(output);
         sc.stop();
     }
 }
