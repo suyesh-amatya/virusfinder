@@ -92,7 +92,6 @@ public class BlastN {
         SparkConf conf = new SparkConf().setAppName("BlastN");
         JavaSparkContext sc = new JavaSparkContext(conf);
         sc.hadoopConfiguration().set("textinputformat.record.delimiter", ">");
-        SQLContext sqlContext = new SQLContext(sc);
 
 
         FileSystem fs = FileSystem.get(new Configuration());

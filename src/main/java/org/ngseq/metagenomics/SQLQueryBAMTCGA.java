@@ -106,27 +106,35 @@ public class SQLQueryBAMTCGA {
 
               String unMapped = "SELECT * from records WHERE readUnmapped = TRUE";
               String mapped = "SELECT * from records WHERE readUnmapped = FALSE";
+              String filterHuman = "SELECT * from records WHERE readUnmapped = FALSE OR referenceName not like 'chr%'";
 
-              Dataset df = sqlContext.sql(mapped);
-              Dataset df2 = sqlContext.sql(unMapped);
+                  //case name for writing files
 
+                  String dr = dir.getPath().toUri().getRawPath();
+                  List<String> items = Arrays.asList(dr.split("\\s*/\\s*"));
 
-             //Dataset meta = df.groupBy("referenceName").count();
-             //JavaRDD <String> metaRDD = dfToMeta(meta );
-
-              //case name for writing files
-              String dr = dir.getPath().toUri().getRawPath();
-              List<String> items = Arrays.asList(dr.split("\\s*/\\s*"));
-
-              String name = items.get(items.size() - 1);
+                  String name = items.get(items.size() - 1);
 
 
-              //metaRDD.coalesce(1).saveAsTextFile(metaOut + "/" +name);
+              if (metaOut!=null) {
+                  Dataset df = sqlContext.sql(mapped);
+                  Dataset meta = df.groupBy("referenceName").count();
+                  JavaRDD <String> metaRDD = dfToMeta(meta );
 
-              if (select.equals("sorted")) {
+
+                  metaRDD.coalesce(1).saveAsTextFile(metaOut + "/" +name);
+              }
 
 
 
+
+
+
+              if (select.equals("aligned")) {
+                  Dataset df1 = sqlContext.sql(mapped);
+                  JavaPairRDD<Text, SequencedFragment> aligned = dfToFastq(df1);
+                  aligned.saveAsNewAPIHadoopFile(output + "/" + name, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+                /*
                   Dataset pairEndKeys = df2.groupBy("readName").agg(count("*").as("count")).where("count > 1");
 
                   Dataset<Row> pairDF = pairEndKeys.join(df2, pairEndKeys.col("readName").equalTo(samDF.col("readName"))).drop(pairEndKeys.col("readName"));
@@ -143,10 +151,18 @@ public class SQLQueryBAMTCGA {
                   JavaPairRDD<Text, SequencedFragment> reverseRDD = dfToFastq(reverseDF);
                   forwardRDD.coalesce(1).saveAsNewAPIHadoopFile(output + "/" + name + "/" + "forward", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
                   reverseRDD.coalesce(1).saveAsNewAPIHadoopFile(output + "/" + name + "/" + "reverse", Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+                  */
+
+              } else if (select.equals("filterHuman")) {
+                  Dataset df2 = sqlContext.sql(filterHuman);
+                  JavaPairRDD<Text, SequencedFragment> FilteredHuman = dfToFastq(df2);
+                  FilteredHuman.saveAsNewAPIHadoopFile(output + "/" + name, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
 
               } else {
-                  JavaPairRDD<Text, SequencedFragment> unAligned = dfToFastq(df2);
+                  Dataset df3 = sqlContext.sql(unMapped);
+                  JavaPairRDD<Text, SequencedFragment> unAligned = dfToFastq(df3);
                   unAligned.saveAsNewAPIHadoopFile(output + "/" + name, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+
 
               }
 

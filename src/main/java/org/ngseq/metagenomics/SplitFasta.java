@@ -34,14 +34,13 @@ public class SplitFasta {
 
         String out = (cmd.hasOption("out")==true)? cmd.getOptionValue("out"):null;
         String in = (cmd.hasOption("in")==true)? cmd.getOptionValue("in"):null;
-        String partitions = (cmd.hasOption("partitions")==true)? cmd.getOptionValue("partitions"):null;
 
         SparkConf conf = new SparkConf().setAppName("SplitFasta");
         JavaSparkContext sc = new JavaSparkContext(conf);
         sc.hadoopConfiguration().set("textinputformat.record.delimiter", ">");
 
         JavaRDD<String> rdd = sc.textFile(in);
-        JavaRDD<String> crdd = rdd.map(v->">"+v.trim()).repartition(Integer.valueOf(partitions));
+        JavaRDD<String> crdd = rdd.map(v->">"+v.trim()).repartition(100);
 
         crdd.saveAsTextFile(out);
         sc.stop();
