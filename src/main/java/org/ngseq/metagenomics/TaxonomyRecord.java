@@ -1,7 +1,5 @@
 package org.ngseq.metagenomics;
 
-import org.apache.hadoop.classification.InterfaceAudience;
-
 import java.io.Serializable;
 
 
@@ -15,7 +13,7 @@ import java.io.Serializable;
     private String acc1;
     private String taxid;
     private String gi;
-    private String species;
+    private String organism;
 
 
     public String getAcc() {
@@ -46,12 +44,12 @@ import java.io.Serializable;
         this.gi = gi;
     }
 
-    public String getSpecies() {
-        return species;
+    public String getOrganism() {
+        return organism;
     }
 
-    public void setSpecies(String species) {
-        this.species = species;
+    public void setOrganism(String organism) {
+        this.organism = organism;
     }
 
 }

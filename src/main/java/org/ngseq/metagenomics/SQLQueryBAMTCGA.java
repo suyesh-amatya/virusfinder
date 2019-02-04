@@ -106,8 +106,8 @@ public class SQLQueryBAMTCGA {
 
               String unMapped = "SELECT * from records WHERE readUnmapped = TRUE";
               String mapped = "SELECT * from records WHERE readUnmapped = FALSE";
-              String filterHuman = "SELECT * from records WHERE readUnmapped = FALSE OR referenceName not like 'chr%'";
-
+              String filterHuman = "SELECT * from records WHERE readUnmapped = TRUE OR referenceName NOT LIKE 'chr%'";
+              //String test = "SELECT * from records WHERE referenceName NOT LIKE 'chr%' OR readUnmapped = TRUE";
                   //case name for writing files
 
                   String dr = dir.getPath().toUri().getRawPath();
@@ -124,10 +124,6 @@ public class SQLQueryBAMTCGA {
 
                   metaRDD.coalesce(1).saveAsTextFile(metaOut + "/" +name);
               }
-
-
-
-
 
 
               if (select.equals("aligned")) {
@@ -155,8 +151,11 @@ public class SQLQueryBAMTCGA {
 
               } else if (select.equals("filterHuman")) {
                   Dataset df2 = sqlContext.sql(filterHuman);
+
+
                   JavaPairRDD<Text, SequencedFragment> FilteredHuman = dfToFastq(df2);
                   FilteredHuman.saveAsNewAPIHadoopFile(output + "/" + name, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+
 
               } else {
                   Dataset df3 = sqlContext.sql(unMapped);
