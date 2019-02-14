@@ -105,11 +105,11 @@ public class SQLQueryBAMTCGA {
               samDF.registerTempTable("records");
 
               String unMapped = "SELECT * from records WHERE readUnmapped = TRUE";
-              String mapped = "SELECT * from records WHERE readUnmapped = FALSE";
+              String mappedToVirus = "SELECT * from records WHERE readUnmapped = FALSE AND referenceName NOT LIKE 'chr%'";
               String filterHuman = "SELECT * from records WHERE readUnmapped = TRUE OR referenceName NOT LIKE 'chr%'";
-              //String test = "SELECT * from records WHERE referenceName NOT LIKE 'chr%' OR readUnmapped = TRUE";
-                  //case name for writing files
 
+
+                  //case name for writing files
                   String dr = dir.getPath().toUri().getRawPath();
                   List<String> items = Arrays.asList(dr.split("\\s*/\\s*"));
 
@@ -117,7 +117,7 @@ public class SQLQueryBAMTCGA {
 
 
               if (metaOut!=null) {
-                  Dataset df = sqlContext.sql(mapped);
+                  Dataset df = sqlContext.sql(mappedToVirus);
                   Dataset meta = df.groupBy("referenceName").count();
                   JavaRDD <String> metaRDD = dfToMeta(meta );
 
@@ -127,9 +127,11 @@ public class SQLQueryBAMTCGA {
 
 
               if (select.equals("aligned")) {
-                  Dataset df1 = sqlContext.sql(mapped);
+                  Dataset df1 = sqlContext.sql(mappedToVirus);
                   JavaPairRDD<Text, SequencedFragment> aligned = dfToFastq(df1);
+
                   aligned.saveAsNewAPIHadoopFile(output + "/" + name, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+
                 /*
                   Dataset pairEndKeys = df2.groupBy("readName").agg(count("*").as("count")).where("count > 1");
 

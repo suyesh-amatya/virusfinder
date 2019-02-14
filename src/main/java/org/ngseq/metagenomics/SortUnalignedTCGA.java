@@ -1,5 +1,6 @@
 package org.ngseq.metagenomics;
 
+import htsjdk.samtools.SAMRecord;
 import org.apache.commons.cli.*;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -15,7 +16,9 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.seqdoop.hadoop_bam.FastqInputFormat;
+import org.seqdoop.hadoop_bam.FastqOutputFormat;
 import org.seqdoop.hadoop_bam.SequencedFragment;
+import scala.Tuple2;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -81,12 +84,18 @@ public class SortUnalignedTCGA {
 
             Dataset<Row> sortedPairDF = pairDF.sort("key");
 
+
+            // name of the case
             String dr = dir.getPath().toUri().getRawPath();
             List<String> items = Arrays.asList(dr.split("\\s*/\\s*"));
 
             String name = items.get(items.size() - 1);
 
-            dfToFasta(sortedPairDF).coalesce(1).saveAsTextFile(output + "/" + name);
+
+            // save normalized case
+            //dfToFasta(sortedPairDF).coalesce(1).saveAsTextFile(output + "/" + name);
+            dfToFastqRDD(sortedPairDF).coalesce(1).saveAsNewAPIHadoopFile(output + "/" + name, Text.class, SequencedFragment.class, FastqOutputFormat.class, sc.hadoopConfiguration());
+
         }
 
 
@@ -142,4 +151,17 @@ public class SortUnalignedTCGA {
         });
 
     }
+    private static JavaPairRDD<Text, SequencedFragment> dfToFastqRDD(Dataset<Row> df) {
+        return df.toJavaRDD().mapToPair(row ->  {
+            Text t = new Text((String) row.getAs("key"));
+            SequencedFragment sf = new SequencedFragment();
+            sf.setSequence(new Text((String) row.getAs("sequence")));
+            sf.setRead((Integer) row.getAs("read"));
+            sf.setQuality(new Text((String) row.getAs("quality")));
+
+            return new Tuple2<Text, SequencedFragment>(t, sf);
+        });
+    }
+
+
 }

@@ -68,7 +68,7 @@ public class AssemblyOutput {
 
 
 
-        crdd.coalesce(100).saveAsTextFile(output);
+        crdd.repartition(100).saveAsTextFile(output);
         sc.stop();
     }
 }
