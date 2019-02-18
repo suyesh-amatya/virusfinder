@@ -11,6 +11,7 @@ import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.api.java.function.Function;
+import org.apache.spark.sql.functions.*;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -59,19 +60,27 @@ public class EstimateReadsV2 {
 
         Dataset combined = sqlContext.sql(sql);
         combined.show();
+        Dataset filtered = combined.filter(combined.col("family").notEqual("null"));
 
+        /*
         JavaRDD<String> combinedRDD = dfToTabDelimited(combined);
         JavaRDD<String> filteredRDD = combinedRDD.filter(x -> !x.contains("null"));
         filteredRDD.saveAsTextFile(outDir);
+        */
+        Dataset groupped = filtered.groupBy("contig").agg(
+                org.apache.spark.sql.functions.sum(combined.col("count")).as("reads"),
+                org.apache.spark.sql.functions.count("case").as("cases"));
 
+        groupped.show(100);
+        groupped.registerTempTable("final");
+        dfToTabDelimited(groupped).saveAsTextFile(outDir);
     }
 
     private static JavaRDD<String> dfToTabDelimited(Dataset<Row> df) {
         return df.toJavaRDD().map(row -> {
             //qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore
 
-            String output = row.getAs("contig") + "\t" + row.getAs("count") + "\t" + row.getAs("length")
-                    + "\t" + row.getAs("family")+ "\t" + row.getAs("case");
+            String output = row.getAs("contig") + "\t" + row.getAs("reads") + "\t" + row.getAs("cases");
 
             return output;
         });
@@ -80,56 +89,52 @@ public class EstimateReadsV2 {
     private static Dataset<Row> registerCountedReads (String input, JavaSparkContext sc, SQLContext sqlContext) {
         JavaRDD<String> contigs = sc.textFile(input);
 
-// The schema is encoded in a string
+        // The schema is encoded in a string
         String schemaString = "contig count case";
+        // Generate the schema based on the string of schema
 
-// Generate the schema based on the string of schema
         List<StructField> fields = new ArrayList<StructField>();
         for (String fieldName: schemaString.split(" ")) {
-            fields.add(DataTypes.createStructField(fieldName, DataTypes.StringType, true));
+                fields.add(DataTypes.createStructField(fieldName, DataTypes.StringType, true));
         }
         StructType schema = DataTypes.createStructType(fields);
 
-// Convert records of the RDD (people) to Rows.
+        // Convert records of the RDD to Rows.
         JavaRDD<Row> rowRDD = contigs.map(
-                new Function<String, Row>() {
-                    public Row call(String record) throws Exception {
-                        String[] fields = record.split("\t");
-                        return RowFactory.create(fields[0], fields[1].trim(),fields[2]);
-                    }
+                (Function<String, Row>) record -> {
+                    String[] fields1 = record.split("\t");
+                    return RowFactory.create(fields1[0], fields1[1].trim(), fields1[2]);
                 });
 
-// Apply the schema to the RDD.
-        Dataset peopleDataFrame = sqlContext.createDataFrame(rowRDD, schema);
-        return peopleDataFrame;
+        // Apply the schema to the RDD.
+        Dataset data = sqlContext.createDataFrame(rowRDD, schema);
+        return data;
 
     }
 
     private static Dataset<Row> registerBlastViruses (String input, JavaSparkContext sc, SQLContext sqlContext) {
         JavaRDD<String> contigs = sc.textFile(input);
 
-// The schema is encoded in a string
+        // The schema is encoded in a string
         String schemaString = "contig gi acc identity coverage length e-value organism family subfamily subfamilyType";
 
-// Generate the schema based on the string of schema
+        // Generate the schema based on the string of schema
         List<StructField> fields = new ArrayList<StructField>();
         for (String fieldName: schemaString.split(" ")) {
             fields.add(DataTypes.createStructField(fieldName, DataTypes.StringType, true));
         }
         StructType schema = DataTypes.createStructType(fields);
 
-// Convert records of the RDD (people) to Rows.
+        // Convert records of the RDD (people) to Rows.
         JavaRDD<Row> rowRDD = contigs.map(
-                new Function<String, Row>() {
-                    public Row call(String record) throws Exception {
-                        String[] fields = record.split("\\|");
-                        return RowFactory.create(fields[0], fields[1],fields[2],fields[3],fields[4],fields[5],fields[6],fields[7],fields[8],fields[9],fields[10]);
-                    }
+                (Function<String, Row>) record -> {
+                    String[] fields1 = record.split("\\|");
+                    return RowFactory.create(fields1[0], fields1[1], fields1[2], fields1[3], fields1[4], fields1[5], fields1[6], fields1[7], fields1[8], fields1[9], fields1[10]);
                 });
 
-// Apply the schema to the RDD.
-        Dataset peopleDataFrame = sqlContext.createDataFrame(rowRDD, schema);
-        return peopleDataFrame;
+        // Apply the schema to the RDD.
+        Dataset data = sqlContext.createDataFrame(rowRDD, schema);
+        return data;
 
     }
 
