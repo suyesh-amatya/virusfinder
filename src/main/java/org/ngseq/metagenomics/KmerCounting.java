@@ -67,9 +67,9 @@ public class KmerCounting {
 
         JavaRDD<String> csvfile = sc.textFile(in);
 
+        JavaRDD<String> partitioned = csvfile.repartition(100);
 
-
-        JavaPairRDD<String, ArrayList<String>> getCountedKmers = csvfile.mapPartitionsToPair(records -> {
+        JavaPairRDD<String, ArrayList<String>> getCountedKmers = partitioned.mapPartitionsToPair(records -> {
 
             ArrayList<Tuple2<String, ArrayList<String>>> id_kvalues = new ArrayList<Tuple2<String, ArrayList<String>>>();
             ArrayList<String> kmer_set = new ArrayList<String>();
@@ -102,7 +102,7 @@ public class KmerCounting {
                     if (result.containsKey(br)) {
                         codons.add(result.get(br).toString());
 
-                    } else{
+                    } else {
                         int value = 0;
                         codons.add(Integer.toString(value));
                     }
